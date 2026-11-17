@@ -31,6 +31,7 @@ $branche   = "main"
 #   PROSPECTION_PROGRAMMES     dossier des programmes portables (defaut : %LOCALAPPDATA%\Programs)
 #   PROSPECTION_SOURCE         dossier du code source (defaut : %LOCALAPPDATA%\prospection-outlook)
 #   PROSPECTION_SANS_AUTOMAJ   1 : ne pas telecharger la derniere version de l'installeur
+#   PROSPECTION_FORCER         1 : reinstaller meme si la version installee est deja la derniere
 $parDefaut = Join-Path ([Environment]::GetFolderPath("MyDocuments")) "Prospection"
 
 function Etape { param([string]$t) Write-Host ""; Write-Host "== $t" -ForegroundColor Cyan }
@@ -70,11 +71,35 @@ if ($env:PROSPECTION_SANS_AUTOMAJ -ne "1") {
         if ($iD -ge 0 -and $iL -ge 0 -and ($distant.Substring($iD) -replace "`r", "") -ne ($local.Substring($iL) -replace "`r", "")) {
             Write-Host "Une version plus recente de l'installeur est disponible : elle est utilisee." -ForegroundColor Cyan
             $env:PROSPECTION_SANS_AUTOMAJ = "1"
+            # garde le texte complet de la version recente : c'est elle qui sera deposee dans le dossier installe
+            $recent = Join-Path $env:TEMP ("prospection-installeur-" + [guid]::NewGuid().ToString("N").Substring(0, 8) + ".bat")
+            [IO.File]::WriteAllText($recent, ($distant -replace "`r?`n", "`r`n"), [Text.Encoding]::ASCII)
+            $env:PROSPECTION_INSTALLEUR_RECENT = $recent
             & ([scriptblock]::Create($distant.Substring($iD)))
             return
         }
     } catch {
         # hors ligne ou GitHub indisponible : on continue avec cette version
+    }
+}
+
+function Get-VersionPubliee {
+    # Version publiee de l'outil = dernier changement du dossier outil/ du depot (un changement du README
+    # ou du code source de l'interface seul ne justifie pas de reinstaller). $null si hors ligne.
+    try {
+        $c = @(Invoke-RestMethod "https://api.github.com/repos/$depot/commits?path=outil&sha=$branche&per_page=1" -TimeoutSec 15)[0]
+        return [pscustomobject]@{ Sha = $c.sha.Substring(0, 7); Date = ([datetime]$c.commit.committer.date).ToLocalTime().ToString("dd/MM/yyyy") }
+    } catch { return $null }
+}
+
+function Update-InstalleurLocal {
+    # Depose la derniere version de l'installeur dans le dossier installe ("Installer ou mettre a jour.bat")
+    param([string]$Dossier, [string]$Source)
+    if (-not $Source -or -not (Test-Path $Source)) { $Source = $env:PROSPECTION_INSTALLEUR_RECENT }
+    if (-not $Source -or -not (Test-Path $Source)) { $Source = $env:INSTALLEUR }
+    $cible = Join-Path $Dossier "Installer ou mettre a jour.bat"
+    if (-not (Test-Path $cible) -or (Get-FileHash $Source).Hash -ne (Get-FileHash $cible).Hash) {
+        Copy-Item $Source $cible -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -142,6 +167,36 @@ try {
     New-Item -ItemType Directory -Force $dossier | Out-Null
     if ($miseAJour) { Ok "$dossier (installation existante : mise a jour, tes campagnes sont conservees)" }
     else { Ok $dossier }
+    function Save-Memoire {
+        # Memorise le dossier pour les prochaines mises a jour (fichier personnel, aucun droit requis)
+        if ($env:PROSPECTION_SANS_MEMOIRE -eq "1") { return }
+        New-Item -ItemType Directory -Force (Split-Path $memoire) | Out-Null
+        [IO.File]::WriteAllText($memoire, $dossier, (New-Object Text.UTF8Encoding $false))
+    }
+
+    # ---------- Version : y a-t-il vraiment quelque chose a mettre a jour ? ----------
+    # Compare la version installee (version.txt) a la derniere version publiee AVANT de telecharger.
+    $publiee = Get-VersionPubliee
+    if ($miseAJour) {
+        $installee = ""
+        $fv = Join-Path $dossier "version.txt"
+        if (Test-Path $fv) { $installee = ("" + (Get-Content $fv -TotalCount 1)).Trim().Split(" ")[0] }
+        if ($publiee -and $installee -eq $publiee.Sha -and $env:PROSPECTION_FORCER -ne "1") {
+            Ok "Deja a jour : version $($publiee.Sha) du $($publiee.Date)"
+            $r = Read-Host "       Reinstaller quand meme ? (o/N)"
+            if ("$r" -notmatch '^[oOyY]') {
+                Update-InstalleurLocal -Dossier $dossier
+                Save-Memoire
+                Write-Host ""
+                Write-Host "Rien a mettre a jour. Tes campagnes n'ont pas ete touchees." -ForegroundColor Green
+                return
+            }
+        } elseif ($publiee) {
+            Info "Version installee : $(if ($installee) { $installee } else { 'inconnue' })  ->  nouvelle version : $($publiee.Sha) du $($publiee.Date)"
+        } else {
+            Alerte "Impossible de verifier la derniere version (connexion ?) : installation de la version disponible."
+        }
+    }
 
     $dev = $env:PROSPECTION_DEV
     if (-not $dev) {
@@ -162,9 +217,8 @@ try {
     $racineDepot = (Get-ChildItem $extrait -Directory | Select-Object -First 1).FullName
     $source = Join-Path $racineDepot "outil"
     if (-not (Test-Path (Join-Path $source "Interface\app\index.html"))) { throw "Archive incomplete (interface absente)." }
-    $version = ""
-    try { $version = (Invoke-RestMethod "https://api.github.com/repos/$depot/commits/$branche" -TimeoutSec 15).sha.Substring(0, 7) } catch {}
-    Ok "Version $(if ($version) { $version } else { 'courante' }) telechargee"
+    $version = if ($publiee) { $publiee.Sha } else { "" }
+    Ok "Version $(if ($version) { "$version du $($publiee.Date)" } else { 'courante' }) telechargee"
 
     # ---------- 4. Copie (sans toucher aux campagnes) ----------
     Etape "Installation des fichiers"
@@ -182,18 +236,10 @@ try {
     Get-ChildItem $source -File | ForEach-Object { Copy-Item $_.FullName (Join-Path $dossier $_.Name) -Force }
     New-Item -ItemType Directory -Force (Join-Path $dossier "Campagnes") | Out-Null
     # Installeur de mise a jour : la derniere version (celle de l'archive), pas forcement ce fichier-ci
-    $majSource = Join-Path $racineDepot "Installer.bat"
-    if (-not (Test-Path $majSource)) { $majSource = $env:INSTALLEUR }
-    $majCible = Join-Path $dossier "Installer ou mettre a jour.bat"
-    if (-not (Test-Path $majCible) -or (Get-FileHash $majSource).Hash -ne (Get-FileHash $majCible).Hash) {
-        Copy-Item $majSource $majCible -Force -ErrorAction SilentlyContinue
-    }
-    if ($version) { Set-Content (Join-Path $dossier "version.txt") "$version $(Get-Date -Format 'dd/MM/yyyy HH:mm')" -Encoding ASCII }
-    # Memorise le dossier pour les prochaines mises a jour (fichier personnel, aucun droit requis)
-    if ($env:PROSPECTION_SANS_MEMOIRE -ne "1") {
-        New-Item -ItemType Directory -Force (Split-Path $memoire) | Out-Null
-        [IO.File]::WriteAllText($memoire, $dossier, (New-Object Text.UTF8Encoding $false))
-    }
+    Update-InstalleurLocal -Dossier $dossier -Source (Join-Path $racineDepot "Installer.bat")
+    # version.txt : "<version> <date de la version>" (comparee a la version publiee lors des mises a jour)
+    if ($version) { Set-Content (Join-Path $dossier "version.txt") "$version $($publiee.Date)" -Encoding ASCII }
+    Save-Memoire
     # Fichiers telecharges : on retire la marque "provenant d'Internet" (sinon avertissements Windows)
     Get-ChildItem $dossier -Recurse -File -Include *.bat, *.ps1 | Unblock-File -ErrorAction SilentlyContinue
     Ok "Outil installe dans $dossier"

@@ -40,5 +40,13 @@ foreach ($f in Get-ChildItem $source -File) {
 }
 Copy-Item (Join-Path $PSScriptRoot "Installer.bat") (Join-Path $Cible "Installer ou mettre a jour.bat") -Force
 Write-Host "  Installer ou mettre a jour.bat"
+# version.txt, au meme format que l'installeur : dernier commit touchant outil/ (+local si modifications
+# non commitees, pour que l'installeur ne la confonde pas avec la version publiee)
+try {
+    $sha = (& git -C $PSScriptRoot log -1 --format=%h -- outil).Trim()
+    $date = (& git -C $PSScriptRoot log -1 --format=%cd --date=format:%d/%m/%Y -- outil).Trim()
+    if (& git -C $PSScriptRoot status --porcelain -- outil) { $sha += "+local" }
+    if ($sha) { Set-Content (Join-Path $Cible "version.txt") "$sha $date" -Encoding ASCII; Write-Host "  version.txt ($sha)" }
+} catch {}
 New-Item -ItemType Directory -Force (Join-Path $Cible "Campagnes") | Out-Null
 Write-Host "Termine. Tes campagnes n'ont pas ete modifiees."
