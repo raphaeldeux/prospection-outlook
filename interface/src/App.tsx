@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   BookOpenIcon,
+  InboxIcon,
+  ListTodoIcon,
+  SearchIcon,
   FileTextIcon,
   FolderOpenIcon,
   Loader2Icon,
@@ -30,7 +33,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { EditeurContacts } from "@/EditeurContacts"
 import { EditeurTextes } from "@/EditeurTextes"
+import { AFaire } from "@/AFaire"
 import { Guide } from "@/Guide"
+import { detailStatut, nomAffiche } from "@/lib/statut"
 import { NouvelleCampagne } from "@/NouvelleCampagne"
 import { dateCourte, lireNomCampagne } from "@/lib/campagne"
 import {
@@ -40,6 +45,7 @@ import {
   enregistrerDelai,
   etapeSuivante,
   genererBrouillons,
+  ouvrirBrouillonsOutlook,
   ouvrirDossier,
   type Campagne,
   type Code,
@@ -51,12 +57,13 @@ import { StatutBadge, statuts } from "@/StatutBadge"
 
 const nomsEtapes = ["", "Mail1", "Mail2 · relance 1", "Mail3 · relance 2", "Mail4 · relance 3"]
 const GUIDE = "__guide__"
+const AFAIRE = "__afaire__"
 
 function lireSelection() {
   try {
-    return localStorage.getItem("campagne") ?? ""
+    return localStorage.getItem("campagne") || AFAIRE
   } catch {
-    return ""
+    return AFAIRE
   }
 }
 
@@ -101,12 +108,12 @@ export default function App() {
     void actualiser()
   }, [actualiser])
 
-  function choisir(nom: string) {
-    if (nom === selection) return
-    if (modifsEnCours && !window.confirm("Des modifications ne sont pas enregistrées. Les abandonner ?")) return
-    setModifs({})
+  function choisir(nom: string, filtreInitial: Code | null = null) {
+    if (nom === selection && !filtreInitial) return
+    if (nom !== selection && modifsEnCours && !window.confirm("Des modifications ne sont pas enregistrées. Les abandonner ?")) return
+    if (nom !== selection) setModifs({})
     setSelection(nom)
-    setFiltre(null)
+    setFiltre(filtreInitial)
     setOnglet("suivi")
     try {
       localStorage.setItem("campagne", nom)
@@ -115,9 +122,22 @@ export default function App() {
     }
   }
 
-  const campagnes = suivi?.Campagnes ?? []
+  // les plus récentes en premier (le nom de dossier commence par AAAA-MM)
+  const campagnes = [...(suivi?.Campagnes ?? [])].sort((a, b) => b.Nom.localeCompare(a.Nom))
   const campagne: Campagne | undefined =
-    selection === GUIDE ? undefined : (campagnes.find((c) => c.Nom === selection) ?? campagnes[0])
+    selection === GUIDE || selection === AFAIRE ? undefined : (campagnes.find((c) => c.Nom === selection) ?? campagnes[0])
+  const totalAFaire = campagnes.reduce(
+    (s, c) => s + c.Contacts.filter((x) => ["relance", "afaire", "brouillon"].includes(x.Code)).length,
+    0,
+  )
+
+  async function ouvrirOutlook() {
+    try {
+      await ouvrirBrouillonsOutlook()
+    } catch (e) {
+      toast.error((e as Error).message)
+    }
+  }
 
   async function lancer(etape: number) {
     if (!campagne) return
@@ -164,6 +184,22 @@ export default function App() {
           <MailPlusIcon className="size-5" />
           <span className="font-semibold">Prospection</span>
         </div>
+        <div className="px-2 pb-3">
+          <button
+            onClick={() => choisir(AFAIRE)}
+            className={cn(
+              "flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted",
+              selection === AFAIRE && "bg-muted font-medium",
+            )}
+          >
+            <span className="flex items-center gap-2"><ListTodoIcon className="size-4" /> À faire</span>
+            {totalAFaire > 0 && (
+              <span className="rounded-full bg-amber-100 px-1.5 text-xs text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                {totalAFaire}
+              </span>
+            )}
+          </button>
+        </div>
         <div className="px-4 pb-1 text-xs font-medium text-muted-foreground">Campagnes</div>
         <nav className="flex-1 space-y-0.5 overflow-y-auto px-2">
           {!suivi && chargement && Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="mx-2 my-2 h-5" />)}
@@ -186,7 +222,7 @@ export default function App() {
                 </span>
                 {aTraiter > 0 && (
                   <span
-                    title={`${aTraiter} contact(s) à traiter`}
+                    title={`${aTraiter} contact(s) à traiter : mail à préparer ou brouillon à envoyer`}
                     className="rounded-full bg-amber-100 px-1.5 text-xs text-amber-900 dark:bg-amber-950 dark:text-amber-200"
                   >
                     {aTraiter}
@@ -213,6 +249,8 @@ export default function App() {
       <main className="flex-1 overflow-y-auto p-6">
         {selection === GUIDE ? (
           <Guide />
+        ) : selection === AFAIRE && suivi && campagnes.length > 0 ? (
+          <AFaire suivi={suivi} campagnes={campagnes} onOuvrir={(nom, f) => choisir(nom, f ?? null)} />
         ) : erreur && !suivi ? (
           <EcranErreur erreur={erreur} onReessayer={actualiser} chargement={chargement} />
         ) : !campagne ? (
@@ -248,6 +286,7 @@ export default function App() {
             etapeTexte={etapeTexte}
             setEtapeTexte={setEtapeTexte}
             onModifie={signalerModif}
+            modifs={modifs}
           />
         )}
       </main>
@@ -275,7 +314,7 @@ export default function App() {
           <AlertDialogHeader>
             <AlertDialogTitle>{journal?.ok ? "Brouillons créés" : "La création a échoué"}</AlertDialogTitle>
             <AlertDialogDescription>
-              {journal?.titre}. {journal?.ok && "Va dans le dossier Brouillons d'Outlook pour relire et envoyer."}
+              {journal?.titre}. {journal?.ok && "Relis-les puis envoie-les depuis le dossier Brouillons d'Outlook."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <pre className="max-h-80 overflow-auto rounded-lg bg-muted p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap">
@@ -283,6 +322,11 @@ export default function App() {
           </pre>
           <AlertDialogFooter>
             <AlertDialogCancel>Fermer</AlertDialogCancel>
+            {journal?.ok && (
+              <Button onClick={() => void ouvrirOutlook()}>
+                <InboxIcon /> Ouvrir les brouillons dans Outlook
+              </Button>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -307,6 +351,7 @@ function VueCampagne(props: {
   etapeTexte: number
   setEtapeTexte: (n: number) => void
   onModifie: (zone: string, modifie: boolean) => void
+  modifs: Record<string, boolean>
 }) {
   const { campagne, suivi, chargement, filtre, setFiltre, enCours, onglet, setOnglet } = props
   const contacts = campagne.Contacts
@@ -371,7 +416,13 @@ function VueCampagne(props: {
     return { n, texte, aCreer, brouillons, envoyes, prevus, enAttente, raison }
   })
 
-  const visibles = filtre ? contacts.filter((c) => c.Code === filtre) : contacts
+  const [recherche, setRecherche] = useState("")
+  const terme = recherche.trim().toLowerCase()
+  const visibles = contacts.filter(
+    (c) =>
+      (!filtre || c.Code === filtre) &&
+      (!terme || [c.Prenom, c.Nom, c.Entreprise, c.Email].some((v) => (v ?? "").toLowerCase().includes(terme))),
+  )
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -399,11 +450,17 @@ function VueCampagne(props: {
       <Tabs value={onglet} onValueChange={(v) => setOnglet(String(v))}>
         <TabsList>
           <TabsTrigger value="suivi"><MailPlusIcon /> Suivi et brouillons</TabsTrigger>
-          <TabsTrigger value="contacts"><UsersIcon /> Contacts ({contacts.length})</TabsTrigger>
-          <TabsTrigger value="textes"><FileTextIcon /> Textes des mails</TabsTrigger>
+          <TabsTrigger value="contacts">
+            <UsersIcon /> Contacts ({contacts.length})
+            {props.modifs.contacts && <span className="size-1.5 rounded-full bg-amber-500" title="Modifications non enregistrées" />}
+          </TabsTrigger>
+          <TabsTrigger value="textes">
+            <FileTextIcon /> Textes des mails
+            {props.modifs.textes && <span className="size-1.5 rounded-full bg-amber-500" title="Modifications non enregistrées" />}
+          </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="contacts" className="pt-4">
+        <TabsContent value="contacts" className="pt-4" keepMounted>
           {fichiers ? (
             <EditeurContacts
               key={campagne.Nom}
@@ -420,7 +477,7 @@ function VueCampagne(props: {
           )}
         </TabsContent>
 
-        <TabsContent value="textes" className="pt-4">
+        <TabsContent value="textes" className="pt-4" keepMounted>
           {fichiers ? (
             <EditeurTextes
               key={campagne.Nom}
@@ -453,14 +510,11 @@ function VueCampagne(props: {
               </CardHeader>
               <CardContent className="space-y-2">
                 {e.prevus === 0 && contacts.length > 0 ? (
-                  <p className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300">
-                    <TriangleAlertIcon className="mt-0.5 size-3.5 shrink-0" />
-                    <span>
-                      Aucun contact n'a d'objet pour Mail{e.n} : la séquence s'arrête avant.{" "}
-                      <button className="underline underline-offset-2" onClick={() => setOnglet("contacts")}>
-                        Renseigner l'objet
-                      </button>
-                    </span>
+                  <p className="text-xs text-muted-foreground">
+                    Étape non prévue (aucun objet Mail{e.n}).{" "}
+                    <button className="underline underline-offset-2 hover:text-foreground" onClick={() => setOnglet("contacts")}>
+                      Ajouter cette relance
+                    </button>
                   </p>
                 ) : bloque ? (
                   <p className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300">
@@ -503,6 +557,15 @@ function VueCampagne(props: {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
+        <div className="relative">
+          <SearchIcon className="absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={recherche}
+            onChange={(e) => setRecherche(e.target.value)}
+            placeholder="Rechercher un contact"
+            className="h-7 w-52 pl-7 text-sm"
+          />
+        </div>
         <Button size="sm" variant={filtre === null ? "secondary" : "ghost"} onClick={() => setFiltre(null)}>
           Tous ({contacts.length})
         </Button>
@@ -531,14 +594,14 @@ function VueCampagne(props: {
                 <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
                   {contacts.length === 0
                     ? "Aucun contact. Ajoute-les dans l'onglet « Contacts »."
-                    : "Aucun contact avec ce statut."}
+                    : "Aucun contact ne correspond."}
                 </TableCell>
               </TableRow>
             )}
             {visibles.map((c, i) => (
               <TableRow key={`${i}-${c.Email}`}>
                 <TableCell className="pl-4">
-                  <div className="font-medium">{[c.Civilite, c.Prenom, c.Nom].filter(Boolean).join(" ")}</div>
+                  <div className="font-medium">{nomAffiche(c)}</div>
                   <div className="text-xs text-muted-foreground">{c.Email || "adresse manquante"}</div>
                 </TableCell>
                 <TableCell>{c.Entreprise}</TableCell>
@@ -554,9 +617,7 @@ function VueCampagne(props: {
                 <TableCell className="pr-4">
                   <div className="flex flex-col items-start gap-1">
                     <StatutBadge code={c.Code} />
-                    {(c.Code === "attente" || (c.Code === "termine" && c.NbEtapes < 4)) && (
-                      <span className="text-xs text-muted-foreground">{c.Action}</span>
-                    )}
+                    <span className="text-xs text-muted-foreground">{detailStatut(c)}</span>
                   </div>
                 </TableCell>
               </TableRow>

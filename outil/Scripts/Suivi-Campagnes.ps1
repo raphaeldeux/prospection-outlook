@@ -184,6 +184,9 @@ foreach ($dossier in $dossiers) {
 
         $suivante = $derniere + 1
         $code = ""
+        # donnees structurees pour l'interface (qui redige les messages elle-meme, en francais accentue)
+        $ilYA = if ($derniere -gt 0) { ($aujourdhui - $dates[$derniere].Date).Days } else { $null }
+        $relanceLe = if ($derniere -gt 0) { Format-Date $dates[$derniere].Date.AddDays($delai) } else { "" }
         if ($reponse) {
             $action = "A repondu le $(Format-Date $reponse.Date) - a reprendre a la main"; $code = "repondu"
         } elseif ($etapesBrouillon -contains $suivante) {
@@ -193,7 +196,6 @@ foreach ($dossier in $dossiers) {
         } elseif ($suivante -gt $nbEtapes) {
             $action = if ($nbEtapes -lt 4) { "Sequence terminee apres Mail$nbEtapes (pas d'objet pour Mail$($nbEtapes + 1)), pas de reponse" } else { "Sequence terminee, pas de reponse" }; $code = "termine"
         } else {
-            $ilYA = ($aujourdhui - $dates[$derniere].Date).Days
             if ($ilYA -ge $delai) {
                 $action = "Relance Mail$suivante possible (dernier envoi il y a $ilYA j)"; $code = "relance"
             } else {
@@ -215,6 +217,9 @@ foreach ($dossier in $dossiers) {
             NbEtapes   = $nbEtapes
             Action     = $action
             Code       = $code
+            DateReponse      = if ($reponse) { Format-Date $reponse.Date } else { "" }
+            RelancePossibleLe = $relanceLe
+            JoursDepuisEnvoi = $ilYA
         })
     }
 }

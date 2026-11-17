@@ -9,6 +9,7 @@
 #   PUT  /api/texte     -> enregistre Textes\MailN.txt
 #   PUT  /api/parametres -> enregistre les reglages de la campagne (delai avant relance)
 #   POST /api/ouvrir    -> ouvre le dossier de la campagne dans l'Explorateur
+#   POST /api/outlook-brouillons -> affiche le dossier Brouillons dans Outlook
 #   POST /api/campagnes -> cree une campagne a partir de "_Modele campagne"
 #
 # Securite : ecoute uniquement sur localhost, et chaque appel /api doit porter l'en-tete
@@ -227,6 +228,17 @@ try {
                     Write-FichierCampagne -Chemin (Join-Path $dossier "parametres.json") -Contenu $json
                     Write-Host "$(Get-Date -Format HH:mm:ss) Delai avant relance : $delai jour(s) - $($corps.campagne)"
                     Send-Json $ctx 200 @{ ok = $true }
+                    continue
+                }
+
+                if ($chemin -eq "/api/outlook-brouillons" -and $req.HttpMethod -eq "POST") {
+                    # Affiche le dossier Brouillons dans la fenetre Outlook ouverte (pour relire et envoyer)
+                    $cmd = "`$o = [Runtime.InteropServices.Marshal]::GetActiveObject('Outlook.Application'); " +
+                           "`$f = `$o.GetNamespace('MAPI').GetDefaultFolder(16); `$e = `$o.ActiveExplorer(); " +
+                           "if (`$e) { `$e.CurrentFolder = `$f; `$e.Activate() } else { `$f.Display() }"
+                    $res = Invoke-ScriptEnfant $cmd
+                    if ($res.Code -eq 0) { Send-Json $ctx 200 @{ ok = $true } }
+                    else { Send-Json $ctx 500 @{ erreur = "Impossible d'ouvrir Outlook. Verifie qu'Outlook classique est ouvert." } }
                     continue
                 }
 

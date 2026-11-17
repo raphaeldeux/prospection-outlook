@@ -13,6 +13,12 @@ export type Contact = {
   NbEtapes: number
   Action: string
   Code: Code
+  /** Date de la réponse (jj/mm/aaaa) si le contact a répondu */
+  DateReponse?: string
+  /** Date à partir de laquelle la relance suivante est possible */
+  RelancePossibleLe?: string
+  /** Jours écoulés depuis le dernier envoi */
+  JoursDepuisEnvoi?: number | null
 }
 
 export type EtatTexte = "pret" | "a_completer" | "absent"
@@ -102,4 +108,9 @@ export async function enregistrerDelai(campagne: string, delaiRelanceJours: numb
   return lire<{ ok: boolean }>(
     await fetch("/api/parametres", { method: "PUT", headers: entetes, body: JSON.stringify({ campagne, delaiRelanceJours }) }),
   )
+}
+
+/** Affiche le dossier Brouillons dans Outlook */
+export async function ouvrirBrouillonsOutlook() {
+  return lire<{ ok: boolean }>(await fetch("/api/outlook-brouillons", { method: "POST", headers: entetes }))
 }

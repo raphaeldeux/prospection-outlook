@@ -230,6 +230,12 @@ export function Guide() {
       </Section>
 
       <Section id="statuts" titre="Lire le suivi">
+        <p>
+          <strong>La page « À faire »</strong> (en haut à gauche) résume toutes tes campagnes : mails à préparer, brouillons à
+          envoyer (avec un bouton qui ouvre directement le dossier Brouillons d'Outlook) et réponses reçues. Commence ta
+          journée par là ; un clic t'amène au bon endroit.
+        </p>
+        <p>Dans une campagne, chaque contact a un statut :</p>
         <div className="space-y-2">
           {([
             ["relance", "Le délai de la campagne est écoulé depuis le dernier mail : la relance suivante peut être créée."],

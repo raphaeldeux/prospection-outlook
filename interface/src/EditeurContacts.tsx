@@ -64,6 +64,8 @@ export function EditeurContacts(props: {
   const [sauvegarde, setSauvegarde] = useState(false)
   const [aSupprimer, setASupprimer] = useState<number | null>(null)
   const [importOuvert, setImportOuvert] = useState(false)
+  // Bloc des objets : replie par defaut quand les objets sont deja definis (gagne de la place pour le tableau)
+  const [objetsOuverts, setObjetsOuverts] = useState(false)
   const [objets, setObjets] = useState<string[]>(() =>
     [1, 2, 3, 4].map((n) => plusFrequent(props.contacts.map((c) => c[`Sujet${n}`] ?? ""))),
   )
@@ -210,11 +212,37 @@ export function EditeurContacts(props: {
     }
   }
 
+  // Objets en conflit (identiques ou début d'un objet précédent) : le bloc doit rester ouvert pour les corriger
+  const objetsEnConflit = [2, 3, 4].some((n) => {
+    const o = objets[n - 1].trim()
+    return o && [1, 2, 3].some((m) => m < n && objets[m - 1].trim().startsWith(o))
+  })
+  const blocObjetsOuvert = objetsOuverts || objetsEnConflit || !objets[0].trim()
+
   return (
     <div className="space-y-4">
+      {!blocObjetsOuvert ? (
+        <Card size="sm">
+          <CardContent className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+            <span className="font-medium">Objets des mails</span>
+            {[1, 2, 3, 4].filter((n) => objets[n - 1].trim()).map((n) => (
+              <span key={n} className="max-w-80 truncate text-muted-foreground" title={objets[n - 1]}>
+                Mail{n} : {objets[n - 1]}
+              </span>
+            ))}
+            <div className="flex-1" />
+            <Button size="sm" variant="outline" onClick={() => setObjetsOuverts(true)}>Modifier les objets</Button>
+          </CardContent>
+        </Card>
+      ) : (
       <Card size="sm">
         <CardHeader>
-          <CardTitle className="text-sm">Objets des mails</CardTitle>
+          <CardTitle className="flex items-center justify-between text-sm">
+            Objets des mails
+            {objets[0].trim() && !objetsEnConflit && (
+              <Button size="xs" variant="ghost" onClick={() => setObjetsOuverts(false)}>Replier</Button>
+            )}
+          </CardTitle>
           <CardDescription>
             L'objet saisi ici s'applique directement à tous les contacts. Les variables {"{{CIVILITE}}"}, {"{{PRENOM}}"},{" "}
             {"{{NOM}}"} et {"{{ENTREPRISE}}"} sont remplacées pour chaque contact. Un objet vide arrête la séquence à cette étape.
@@ -265,6 +293,7 @@ export function EditeurContacts(props: {
           })}
         </CardContent>
       </Card>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-xs text-muted-foreground">
