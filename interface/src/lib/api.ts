@@ -40,10 +40,36 @@ export type Suivi = { GenereLe: string; Campagnes: Campagne[] }
 // L'en-tete X-Prospection est exige par le serveur local (protection contre les appels d'autres sites)
 const entetes = { "X-Prospection": "1", "Content-Type": "application/json" }
 
+/** Après une mise à jour, le serveur redémarre : on attend qu'il réponde puis on recharge la page */
+let rechargementPrevu = false
+function rechargerApresRedemarrage() {
+  if (rechargementPrevu) return
+  rechargementPrevu = true
+  const essayer = async () => {
+    try {
+      const r = await fetch("/api/version", { headers: entetes })
+      if (r.ok) return window.location.reload()
+    } catch {
+      /* serveur pas encore prêt */
+    }
+    setTimeout(essayer, 2000)
+  }
+  setTimeout(essayer, 3000)
+}
+
 async function lire<T>(r: Response): Promise<T> {
   const data = await r.json().catch(() => ({}))
   if (!r.ok) {
-    const e = new Error(data.erreur ?? `Erreur ${r.status}`) as Error & { journal?: string }
+    let message: string = data.erreur ?? `Erreur ${r.status}`
+    if (data.redemarrage) {
+      // le serveur a détecté une nouvelle version de ses scripts et redémarre
+      message = "L'outil vient d'être mis à jour : l'interface redémarre, la page va se recharger…"
+      rechargerApresRedemarrage()
+    } else if (r.status === 404 && data.erreur === "Route inconnue.") {
+      // ancien serveur (sans redémarrage automatique) face à une page plus récente
+      message = "L'interface a été mise à jour mais tourne encore avec l'ancienne version : ferme la fenêtre noire et relance Interface.bat."
+    }
+    const e = new Error(message) as Error & { journal?: string }
     e.journal = data.journal
     throw e
   }

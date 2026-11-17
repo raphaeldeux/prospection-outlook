@@ -94,9 +94,10 @@ function Get-InfosVersion {
 # Script lance (dans une fenetre visible) pour mettre a jour depuis l'interface : arrete ce serveur et sa
 # fenetre, lance l'installeur en mode mise a jour sur ce dossier, puis redemarre l'interface.
 $scriptMiseAJour = @'
-param([int]$ServeurPid, [string]$Dossier, [int]$Port = 8765)
+param([int]$ServeurPid, [string]$Dossier, [int]$Port = 8765, [switch]$SansInstallation)
 $Host.UI.RawUI.WindowTitle = "Mise a jour de Prospection Outlook"
-Write-Host "Mise a jour de Prospection Outlook en cours : ne ferme pas cette fenetre." -ForegroundColor Cyan
+if ($SansInstallation) { Write-Host "Redemarrage de l'interface (nouvelle version des scripts detectee)..." -ForegroundColor Cyan }
+else { Write-Host "Mise a jour de Prospection Outlook en cours : ne ferme pas cette fenetre." -ForegroundColor Cyan }
 Start-Sleep -Seconds 1
 $parent = (Get-CimInstance Win32_Process -Filter "ProcessId=$ServeurPid" -ErrorAction SilentlyContinue).ParentProcessId
 Stop-Process -Id $ServeurPid -Force -ErrorAction SilentlyContinue
@@ -104,9 +105,11 @@ if ($parent) {
     $p = Get-Process -Id $parent -ErrorAction SilentlyContinue
     if ($p -and $p.ProcessName -eq "cmd") { Stop-Process -Id $parent -Force -ErrorAction SilentlyContinue }
 }
-$env:PROSPECTION_DOSSIER = $Dossier; $env:PROSPECTION_DEV = "N"; $env:PROSPECTION_FORCER = "1"
-cmd /c "`"$Dossier\Installer ou mettre a jour.bat`" < nul"
-$env:PROSPECTION_DOSSIER = $null; $env:PROSPECTION_DEV = $null; $env:PROSPECTION_FORCER = $null
+if (-not $SansInstallation) {
+    $env:PROSPECTION_DOSSIER = $Dossier; $env:PROSPECTION_DEV = "N"; $env:PROSPECTION_FORCER = "1"
+    cmd /c "`"$Dossier\Installer ou mettre a jour.bat`" < nul"
+    $env:PROSPECTION_DOSSIER = $null; $env:PROSPECTION_DEV = $null; $env:PROSPECTION_FORCER = $null
+}
 $env:PROSPECTION_SANS_NAVIGATEUR = "1"
 Start-Process -FilePath (Join-Path $Dossier "Interface.bat") -ArgumentList "-Port $Port" -WorkingDirectory $Dossier
 Write-Host ""
@@ -179,6 +182,18 @@ Write-Host "Laisse cette fenetre ouverte pendant l'utilisation. La fermer arrete
 if (-not $SansNavigateur -and $env:PROSPECTION_SANS_NAVIGATEUR -ne "1") { Start-Process $url }
 $env:PROSPECTION_SANS_NAVIGATEUR = $null
 
+# Ce script est charge en memoire au demarrage : si une nouvelle version est installee pendant que
+# l'interface tourne (mise a jour, Deployer.ps1), le serveur se relance tout seul pour l'utiliser.
+# Sans ca, la page (nouvelle) appellerait des routes que l'ancien serveur ne connait pas.
+$versionDuCode = (Get-Item $PSCommandPath).LastWriteTimeUtc
+$redemarrageLance = $false
+function Start-Redemarrage {
+    $f = [IO.Path]::Combine($env:TEMP, "prospection-redemarrage-$([guid]::NewGuid().ToString('N').Substring(0, 8)).ps1")
+    [IO.File]::WriteAllText($f, $scriptMiseAJour, [Text.Encoding]::ASCII)
+    Write-Host "$(Get-Date -Format HH:mm:ss) Nouvelle version des scripts detectee : redemarrage de l'interface."
+    Start-Process powershell -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$f`" -ServeurPid $PID -Dossier `"$racine`" -Port $Port -SansInstallation" -WindowStyle Minimized
+}
+
 try {
     while ($listener.IsListening) {
         $ctx = $listener.GetContext()
@@ -187,6 +202,15 @@ try {
         try {
             if ($chemin.StartsWith("/api/")) {
                 if (-not $req.Headers["X-Prospection"]) { Send-Json $ctx 403 @{ erreur = "Requete refusee." }; continue }
+
+                if (-not $redemarrageLance -and (Get-Item $PSCommandPath).LastWriteTimeUtc -ne $versionDuCode) {
+                    $redemarrageLance = $true
+                    Start-Redemarrage
+                }
+                if ($redemarrageLance) {
+                    Send-Json $ctx 503 @{ erreur = "L'outil vient d'etre mis a jour : l'interface redemarre."; redemarrage = $true }
+                    continue
+                }
 
                 if ($chemin -eq "/api/suivi" -and $req.HttpMethod -eq "GET") {
                     Write-Host "$(Get-Date -Format HH:mm:ss) Lecture du suivi..."
