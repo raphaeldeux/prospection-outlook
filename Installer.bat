@@ -58,7 +58,12 @@ function Get-Fichier {
 if ($env:PROSPECTION_SANS_AUTOMAJ -ne "1") {
     try {
         $marqueur = '##PS-' + 'DEBUT##'
-        $distant = (Invoke-WebRequest "https://raw.githubusercontent.com/$depot/$branche/Installer.bat" -UseBasicParsing -TimeoutSec 20).Content
+        # API GitHub (toujours a jour) ; en secours raw.githubusercontent.com (mis en cache ~5 min)
+        try {
+            $distant = (Invoke-WebRequest "https://api.github.com/repos/$depot/contents/Installer.bat?ref=$branche" -Headers @{ Accept = "application/vnd.github.raw" } -UseBasicParsing -TimeoutSec 20).Content
+        } catch {
+            $distant = (Invoke-WebRequest "https://raw.githubusercontent.com/$depot/$branche/Installer.bat" -UseBasicParsing -TimeoutSec 20).Content
+        }
         if ($distant -is [byte[]]) { $distant = [Text.Encoding]::UTF8.GetString($distant) }
         $local = [IO.File]::ReadAllText($env:INSTALLEUR)
         $iD = $distant.IndexOf($marqueur); $iL = $local.IndexOf($marqueur)
