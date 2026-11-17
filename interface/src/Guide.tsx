@@ -33,7 +33,7 @@ const Code = ({ children }: { children: ReactNode }) => (
 
 export function Guide() {
   return (
-    <div className="mx-auto max-w-3xl space-y-4">
+    <div className="mx-auto max-w-6xl space-y-4">
       <div>
         <h1 className="text-xl font-semibold">Guide d'utilisation</h1>
         <p className="text-sm text-muted-foreground">

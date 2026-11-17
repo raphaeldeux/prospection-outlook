@@ -36,6 +36,7 @@ import { EditeurContacts } from "@/EditeurContacts"
 import { EditeurTextes } from "@/EditeurTextes"
 import { ActionsContact } from "@/ActionsContact"
 import { AFaire } from "@/AFaire"
+import { DerniereActualisation } from "@/DerniereActualisation"
 import { Guide } from "@/Guide"
 import { detailStatut, nomAffiche } from "@/lib/statut"
 import { NouvelleCampagne } from "@/NouvelleCampagne"
@@ -277,7 +278,7 @@ export default function App() {
         ) : selection === PARAMETRES ? (
           <Parametres modifsEnCours={modifsEnCours} />
         ) : selection === AFAIRE && suivi && campagnes.length > 0 ? (
-          <AFaire suivi={suivi} campagnes={campagnes} onOuvrir={(nom, f) => choisir(nom, f ?? null)} onActualiser={actualiser} />
+          <AFaire suivi={suivi} campagnes={campagnes} onOuvrir={(nom, f) => choisir(nom, f ?? null)} onActualiser={actualiser} chargement={chargement} />
         ) : erreur && !suivi ? (
           <EcranErreur erreur={erreur} onReessayer={actualiser} chargement={chargement} />
         ) : !campagne ? (
@@ -461,16 +462,15 @@ function VueCampagne(props: {
               <span className="text-sm font-normal text-muted-foreground">{lireNomCampagne(campagne.Nom).date}</span>
             )}
           </h1>
-          <p className="text-sm text-muted-foreground">
-            {contacts.length} contact(s) · suivi lu dans Outlook le {suivi.GenereLe}
-          </p>
+          <p className="text-sm text-muted-foreground">{contacts.length} contact(s)</p>
           <ReglageDelai key={campagne.Nom} campagne={campagne.Nom} delai={campagne.DelaiRelance} onEnregistre={props.onActualiser} />
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={props.onOuvrirDossier}><FolderOpenIcon /> Dossier</Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <DerniereActualisation genereLe={suivi.GenereLe} chargement={chargement} />
           <Button variant="outline" onClick={props.onActualiser} disabled={chargement}>
             <RefreshCwIcon className={cn(chargement && "animate-spin")} /> Actualiser
           </Button>
+          <Button variant="outline" onClick={props.onOuvrirDossier}><FolderOpenIcon /> Dossier</Button>
         </div>
       </div>
 

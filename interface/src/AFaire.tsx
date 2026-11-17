@@ -1,4 +1,4 @@
-import { ArrowRightIcon, CheckCircle2Icon, InboxIcon, MailPlusIcon, MessageSquareReplyIcon, SendIcon, TimerIcon } from "lucide-react"
+import { ArrowRightIcon, CheckCircle2Icon, InboxIcon, MailPlusIcon, MessageSquareReplyIcon, RefreshCwIcon, SendIcon, TimerIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -6,6 +6,7 @@ import { etapeSuivante, ouvrirBrouillonsOutlook, type Campagne, type Code, type 
 import { lireNomCampagne } from "@/lib/campagne"
 import { nomAffiche } from "@/lib/statut"
 import { ActionsContact } from "@/ActionsContact"
+import { DerniereActualisation } from "@/DerniereActualisation"
 
 /** "1 brouillon" / "3 brouillons" */
 const pl = (n: number, singulier: string, pluriel: string) => `${n} ${n > 1 ? pluriel : singulier}`
@@ -21,6 +22,7 @@ export function AFaire(props: {
   campagnes: Campagne[]
   onOuvrir: (campagne: string, filtre?: Code) => void
   onActualiser: () => void
+  chargement: boolean
 }) {
   const { campagnes } = props
 
@@ -66,12 +68,18 @@ export function AFaire(props: {
   )
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold">À faire</h1>
-        <p className="text-sm text-muted-foreground">
-          Toutes tes campagnes, d'après Outlook (lu le {props.suivi.GenereLe}).
-        </p>
+    <div className="mx-auto max-w-6xl space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold">À faire</h1>
+          <p className="text-sm text-muted-foreground">Toutes tes campagnes, d'après Outlook.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <DerniereActualisation genereLe={props.suivi.GenereLe} chargement={props.chargement} />
+          <Button variant="outline" onClick={props.onActualiser} disabled={props.chargement}>
+            <RefreshCwIcon className={props.chargement ? "animate-spin" : ""} /> Actualiser
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
