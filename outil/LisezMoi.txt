@@ -7,6 +7,9 @@ Une interface s'ouvre dans le navigateur : campagnes, suivi, creation des brouil
 directement dans l'interface. Laisser la fenetre noire ouverte pendant l'utilisation.
 Les boutons .bat decrits ci-dessous restent utilisables sans l'interface.
 
+METTRE A JOUR : double-cliquer "Installer ou mettre a jour.bat" (connexion Internet requise).
+Les campagnes ne sont jamais modifiees par la mise a jour.
+
 Chaque campagne a son propre dossier dans Campagnes\, avec ses contacts, ses textes et ses
 boutons. Le code (dossier Scripts\) est partage : il n'y en a qu'une seule copie, commune a
 toutes les campagnes.

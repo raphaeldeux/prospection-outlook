@@ -79,7 +79,11 @@ export function Guide() {
             L'interface se lance en double-cliquant <Code>Interface.bat</Code> à la racine du dossier Prospection. Une
             fenêtre noire s'ouvre : <strong>laisse-la ouverte</strong> pendant l'utilisation, la fermer arrête l'interface.
           </li>
-          <li>Aucune installation n'est nécessaire.</li>
+          <li>
+            L'outil est portable : il ne demande ni droits administrateur ni installation dans Windows. Pour le mettre à jour,
+            double-clique <Code>Installer ou mettre a jour.bat</Code> dans ton dossier Prospection. Tes campagnes sont
+            conservées.
+          </li>
         </ul>
       </Section>
 

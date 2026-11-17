@@ -15,16 +15,24 @@ Tout se fait depuis une interface web locale :
 
 ## Installation (utilisateurs)
 
-Prérequis : Windows, **Outlook classique** (pas le « nouvel Outlook ») avec une signature par défaut. Aucune autre installation n'est nécessaire.
+Prérequis : Windows et **Outlook classique** (pas le « nouvel Outlook »), avec une signature par défaut. Rien d'autre : l'outil est **portable**. Il ne demande ni droits administrateur ni installation dans Windows, et n'a pas besoin de Node.js pour fonctionner.
 
-1. Sur cette page, clique sur **Code** puis **Download ZIP**.
-2. Dans le ZIP, copie le contenu du dossier **`outil`** où tu veux, par exemple `Documents\Prospection`.
-3. Ouvre Outlook, puis double-clique **`Interface.bat`**. L'interface s'ouvre dans ton navigateur. Laisse la fenêtre noire ouverte pendant l'utilisation.
-4. Clique sur **Guide d'utilisation**, en bas à gauche de l'interface.
+1. Télécharge **[Installer.bat](https://github.com/raphaeldeux/prospection-outlook/releases/latest/download/Installer.bat)**.
+2. Double-clique dessus. Si Windows affiche « Windows a protégé votre ordinateur », clique sur *Informations complémentaires* puis *Exécuter quand même*.
+3. Accepte le dossier proposé (`Documents\Prospection`) ou indiques-en un autre. Réponds **N** à la question sur les outils de développement.
+4. Ouvre Outlook, puis double-clique le raccourci **Prospection Outlook** sur le Bureau. L'interface s'ouvre dans ton navigateur : laisse la fenêtre noire ouverte pendant l'utilisation.
+5. Clique sur **Guide d'utilisation**, en bas à gauche de l'interface.
 
-Si Windows affiche « Windows a protégé votre ordinateur » au premier lancement, clique sur *Informations complémentaires* puis *Exécuter quand même*. Les scripts sont lisibles dans `outil\Scripts`.
+L'installeur :
 
-**Mettre à jour** : retélécharge le ZIP et recopie le contenu de `outil` par-dessus ton dossier. Tes campagnes, dans `Campagnes\`, ne sont pas écrasées : seule la campagne modèle `_Modele campagne` est remplacée.
+- vérifie les prérequis : Outlook classique et signature ;
+- télécharge la dernière version depuis ce dépôt ;
+- la copie dans ton dossier ;
+- crée les raccourcis sur le Bureau et dans le menu Démarrer.
+
+**Mettre à jour** : double-clique `Installer ou mettre a jour.bat` dans ton dossier Prospection. Tes campagnes, dans `Campagnes\`, ne sont jamais modifiées : seule la campagne modèle `_Modele campagne` est remplacée.
+
+**Sans l'installeur** : clique sur *Code > Download ZIP* et copie le contenu du dossier `outil` où tu veux.
 
 ## Confidentialité
 
@@ -33,6 +41,7 @@ Tes campagnes (contacts, textes) restent sur ton poste, dans `Campagnes\`. L'int
 ## Organisation du dépôt
 
 ```
+Installer.bat           installeur / mise à jour portable (fichier autonome, publié dans les Releases)
 outil/                  ce que les utilisateurs copient (prêt à l'emploi)
   Interface.bat         lance l'interface
   Scripts/              moteur PowerShell (pilote Outlook en COM)
@@ -44,16 +53,23 @@ Deployer.ps1            copie outil/ vers un dossier de travail sans toucher aux
 
 ## Développement
 
-Il faut Node.js. La version portable (ZIP) suffit, sans installation.
+Lance `Installer.bat` et réponds **O** à la question sur les outils de développement. L'installeur :
 
-```powershell
-cd interface
-npm install
-npm run dev       # interface en mode développement (http://localhost:5173), avec le serveur lancé à côté :
-                  # powershell -File ..\outil\Scripts\Serveur-Interface.ps1 -SansNavigateur
-npm run build     # compile dans outil/Interface/app
+- télécharge **Node.js portable**, la dernière LTS, dans `%LOCALAPPDATA%\Programs`, et vérifie son empreinte SHA-256 ;
+- clone ce dépôt dans `%LOCALAPPDATA%\prospection-outlook` (ou le copie si git est absent) ;
+- installe les dépendances ;
+- crée `Developpement.cmd`, qui ouvre une console avec Node dans le PATH.
+
+Dans cette console, qui s'ouvre directement dans `interface\` :
+
+```bat
+npm run dev       & rem interface en mode developpement (http://localhost:5173), avec le serveur lance a cote :
+                  & rem powershell -File ..\outil\Scripts\Serveur-Interface.ps1 -SansNavigateur
+npm run build     & rem compile dans outil\Interface\app
 cd ..
-.\Deployer.ps1 -Cible "C:\chemin\vers\ton\dossier\Prospection"
+powershell -File Deployer.ps1 -Cible "C:\chemin\vers\ton\dossier\Prospection"
 ```
+
+Pour publier une nouvelle version de l'installeur, ajoute `Installer.bat` comme fichier joint d'une Release GitHub. Le lien `releases/latest/download/Installer.bat` pointe toujours sur la dernière Release.
 
 Pense à mettre à jour le guide intégré (`interface/src/Guide.tsx`) quand un comportement change.
