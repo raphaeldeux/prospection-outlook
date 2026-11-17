@@ -6,11 +6,11 @@
 #   POST /api/generer   -> Build-Mail1.ps1 / Build-Relance.ps1 (cree des BROUILLONS, n'envoie rien)
 #   POST /api/fichiers  -> contenu de contacts.csv et des textes Mail1..4 d'une campagne
 #   PUT  /api/contacts  -> enregistre contacts.csv (UTF-8 avec BOM, separateur ;)
-#   PUT  /api/texte     -> enregistre Textes\MailN.txt
+#   PUT  /api/texte     -> enregistre Textes\MailN.txt, ou le texte personnalise d'un contact (champ email)
 #   PUT  /api/parametres -> enregistre les reglages de la campagne (delai avant relance)
 #   POST /api/ouvrir    -> ouvre le dossier de la campagne dans l'Explorateur
 #   POST /api/outlook-brouillons -> affiche le dossier Brouillons dans Outlook
-#   GET  /api/version   -> version installee / derniere version publiee (+ nouveautes)
+#   GET  /api/version   -> version installee / derniere version publiee (+ nouveautes) ; ?local=1 : sans GitHub
 #   POST /api/mettre-a-jour -> lance la mise a jour (installeur) puis redemarre l'interface
 #   PUT  /api/issue     -> issue d'un contact (RDV, pas interesse...) dans issues.json
 #   POST /api/outlook-reponse -> ouvre dans Outlook le dernier mail recu d'un contact
@@ -72,9 +72,15 @@ function Q { param([string]$s) "'" + ($s -replace ("['" + [char]0x2018 + [char]0
 
 $depotGitHub = "raphaeldeux/prospection-outlook"
 
+# Identifiant de ce demarrage du serveur : la page compare cette valeur avant et apres une mise a jour
+# pour savoir que le NOUVEAU serveur repond (et se recharger toute seule), meme si la version ne change pas.
+$instance = "$PID-$([DateTime]::UtcNow.Ticks)"
+
 function Get-InfosVersion {
     # Version installee (version.txt : "<version> <date>") et derniere version publiee de l'outil : la
-    # derniere release GitHub (tag vX.Y.Z), seule version installee par l'installeur
+    # derniere release GitHub (tag vX.Y.Z), seule version installee par l'installeur.
+    # -Locale : sans interroger GitHub (attente du redemarrage : evite la limite de 60 appels/heure de l'API)
+    param([switch]$Locale)
     $installee = $null
     $fv = Join-Path $racine "version.txt"
     if (Test-Path $fv) {
@@ -82,14 +88,14 @@ function Get-InfosVersion {
         $installee = [ordered]@{ version = $l[0]; date = if ($l.Count -gt 1) { $l[1] } else { "" } }
     }
     $publiee = $null; $release = $null
-    try {
+    if (-not $Locale) { try {
         $r = Invoke-RestMethod "https://api.github.com/repos/$depotGitHub/releases/latest" -TimeoutSec 10
         $date = ([datetime]$r.published_at).ToLocalTime().ToString("dd/MM/yyyy")
         $publiee = [ordered]@{ version = [string]$r.tag_name; date = $date }
         $release = [ordered]@{ nom = [string]$r.name; notes = [string]$r.body; url = [string]$r.html_url; date = $date }
-    } catch {}
+    } catch {} }
     $aJour = if ($installee -and $publiee) { $installee.version -eq $publiee.version } else { $null }
-    return [ordered]@{ installee = $installee; publiee = $publiee; aJour = $aJour; release = $release; dossier = $racine }
+    return [ordered]@{ installee = $installee; publiee = $publiee; aJour = $aJour; release = $release; dossier = $racine; instance = $instance }
 }
 
 # Script lance (dans une fenetre visible) pour mettre a jour depuis l'interface : arrete ce serveur et sa
@@ -129,6 +135,22 @@ function Get-DossierCampagne {
 
 $colonnesStandard = @("Civilite", "Prenom", "Nom", "Entreprise", "Telephone", "Email", "Sujet1", "Sujet2", "Sujet3", "Sujet4")
 $utf8Bom = New-Object System.Text.UTF8Encoding $true   # BOM : Excel affiche correctement les accents
+
+function Read-TextesPersonnalises {
+    # Textes\personnalises.json d'une campagne -> [ordered]@{ email = [ordered]@{ "etape" = texte } } (modifiable)
+    param([string]$Dossier)
+    $res = [ordered]@{}
+    $f = Join-Path $Dossier "Textes\personnalises.json"
+    if (Test-Path $f) {
+        $j = Get-Content $f -Raw -Encoding UTF8 | ConvertFrom-Json
+        foreach ($p in $j.PSObject.Properties) {
+            $etapes = [ordered]@{}
+            foreach ($e in $p.Value.PSObject.Properties) { if ([string]$e.Value) { $etapes[$e.Name] = [string]$e.Value } }
+            if ($etapes.Count) { $res[$p.Name.Trim().ToLower()] = $etapes }
+        }
+    }
+    return $res
+}
 
 function Read-Corps { param($Req) (New-Object IO.StreamReader($Req.InputStream, $utf8)).ReadToEnd() | ConvertFrom-Json }
 
@@ -259,7 +281,13 @@ try {
                         $contenu = if (Test-Path $f) { (Get-Content $f -Raw -Encoding UTF8) -replace "`r`n", "`n" } else { "" }
                         [pscustomobject]@{ etape = $n; contenu = [string]$contenu }
                     })
-                    Send-Json $ctx 200 @{ colonnes = $colonnes; contacts = $contacts; textes = $textes }
+                    # textes personnalises : liste plate { email, etape, contenu } (plus simple a serialiser)
+                    $personnalises = @(foreach ($p in (Read-TextesPersonnalises $dossier).GetEnumerator()) {
+                        foreach ($e in $p.Value.GetEnumerator()) {
+                            [pscustomobject]@{ email = $p.Key; etape = [int]$e.Key; contenu = ([string]$e.Value) -replace "`r`n", "`n" }
+                        }
+                    })
+                    Send-Json $ctx 200 @{ colonnes = $colonnes; contacts = $contacts; textes = $textes; personnalises = $personnalises }
                     continue
                 }
 
@@ -286,9 +314,24 @@ try {
                     $dossier = Get-DossierCampagne $corps.campagne
                     $etape = [int]$corps.etape
                     if (-not $dossier -or $etape -notin 1..4) { Send-Json $ctx 400 @{ erreur = "Campagne ou etape invalide." }; continue }
+                    $contenu = (([string]$corps.contenu) -replace "`r`n", "`n") -replace "`n", "`r`n"
+                    $email = ([string]$corps.email).Trim().ToLower()
+                    if ($email) {
+                        # Texte personnalise d'un contact (Textes\personnalises.json) ; contenu vide = retour au texte commun
+                        $textes = Read-TextesPersonnalises $dossier
+                        if (-not $textes.Contains($email)) { $textes[$email] = [ordered]@{} }
+                        if ([string]::IsNullOrWhiteSpace($contenu)) { $textes[$email].Remove("$etape") } else { $textes[$email]["$etape"] = $contenu }
+                        if ($textes[$email].Count -eq 0) { $textes.Remove($email) }
+                        $f = Join-Path $dossier "Textes\personnalises.json"
+                        New-Item -ItemType Directory -Force (Split-Path $f) | Out-Null
+                        Write-FichierCampagne -Chemin $f -Contenu ([pscustomobject]$textes | ConvertTo-Json -Depth 4)
+                        $quoi = if ([string]::IsNullOrWhiteSpace($contenu)) { "retire (texte commun)" } else { "enregistre" }
+                        Write-Host "$(Get-Date -Format HH:mm:ss) Texte personnalise Mail$etape $quoi pour $email - $($corps.campagne)"
+                        Send-Json $ctx 200 @{ ok = $true }
+                        continue
+                    }
                     $f = Join-Path $dossier "Textes\Mail$etape.txt"
                     New-Item -ItemType Directory -Force (Split-Path $f) | Out-Null
-                    $contenu = (([string]$corps.contenu) -replace "`r`n", "`n") -replace "`n", "`r`n"
                     Write-FichierCampagne -Chemin $f -Contenu $contenu
                     Write-Host "$(Get-Date -Format HH:mm:ss) Texte Mail$etape enregistre - $($corps.campagne)"
                     Send-Json $ctx 200 @{ ok = $true }
@@ -311,7 +354,7 @@ try {
                 }
 
                 if ($chemin -eq "/api/version" -and $req.HttpMethod -eq "GET") {
-                    Send-Json $ctx 200 (Get-InfosVersion)
+                    Send-Json $ctx 200 (Get-InfosVersion -Locale:($req.QueryString["local"] -eq "1"))
                     continue
                 }
 

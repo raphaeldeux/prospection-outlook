@@ -6,6 +6,8 @@
 # chacune repondant a la precedente. Ce script gere les etapes 2, 3 et 4. Chaque etape a son propre
 # objet (colonnes Sujet1/Sujet2/Sujet3/Sujet4 dans contacts.csv) : l'objet de la reponse Outlook est
 # force sur le Sujet de l'etape en cours (au lieu du "RE: ..." automatique).
+# Le texte est celui de l'etape (Textes\MailN.txt), ou le texte personnalise du contact s'il en a un
+# (Textes\personnalises.json, cf. Get-TextesPersonnalises dans Commun.ps1).
 #
 # Un contact est automatiquement SAUTE si :
 #   - aucun mail n'a encore ete envoye pour lui dans ce fil (etape precedente introuvable)
@@ -64,11 +66,10 @@ function Set-CorpsAvantSignature {
     }
 }
 
-if (-not (Test-Path $bodyPath)) { throw "Fichier introuvable : $bodyPath" }
-$bodyTemplate = Get-Content -Path $bodyPath -Raw -Encoding UTF8
-if ($bodyTemplate -match '\[A COMPLETER\]') {
-    throw "Le texte $bodyPath contient encore le marqueur [A COMPLETER] : redige le contenu du mail avant de lancer la generation."
-}
+# Texte commun (peut manquer si tous les contacts ont un texte personnalise) et textes personnalises :
+# le texte de chaque contact est verifie dans la boucle ([A COMPLETER], absent)
+$bodyTemplate = if (Test-Path $bodyPath) { Get-Content -Path $bodyPath -Raw -Encoding UTF8 } else { "" }
+$textesPerso = Get-TextesPersonnalises $Campagne
 $contacts = @(Import-Csv -Path $csvPath -Delimiter ';' -Encoding UTF8)  # @() force un tableau meme avec 1 seule ligne
 
 Write-Host "Connexion a Outlook..."
@@ -175,7 +176,12 @@ for ($i = 0; $i -lt $contacts.Count; $i++) {
     }
 
     # 3) creation de la relance = vraie reponse Outlook au dernier mail envoye, avec l'objet de l'etape
-    $bodyForContact = Resolve-Variables -Texte $bodyTemplate -Contact $contact
+    $modele = Get-TexteDuContact -Commun $bodyTemplate -Personnalises $textesPerso -Email $contact.Email -Etape $Etape
+    if ($modele.Probleme) {
+        Write-Host "[$($contact.Nom)] $($modele.Probleme) - ignore (redige le texte dans l'onglet Textes)." -ForegroundColor Yellow
+        continue
+    }
+    $bodyForContact = Resolve-Variables -Texte $modele.Texte -Contact $contact
     $relanceHtml = Convert-MarkdownLiteToHtml -lines ($bodyForContact -split "`r?`n")
 
     $reply = $dernierEnvoye.Reply()
@@ -197,7 +203,7 @@ for ($i = 0; $i -lt $contacts.Count; $i++) {
     Set-CorpsAvantSignature -MailItem $reply -BodyHtml $relanceHtml
     $reply.Save()
 
-    Write-Host "[$($contact.Nom)] Mail$Etape cree (brouillon) - objet : $sujetPropre - repond a l'envoi du $($dernierEnvoye.SentOn)."
+    Write-Host "[$($contact.Nom)] Mail$Etape cree (brouillon, $($modele.Source)) - objet : $sujetPropre - repond a l'envoi du $($dernierEnvoye.SentOn)."
 }
 
 Write-Host "Termine. Verifie le dossier Brouillons d'Outlook."

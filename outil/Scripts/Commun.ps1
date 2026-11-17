@@ -35,6 +35,43 @@ function Get-Issues {
     return $resultat
 }
 
+function Get-TextesPersonnalises {
+    # Textes propres a un contact, qui REMPLACENT le texte commun de l'etape pour lui seul : fichier
+    # Textes\personnalises.json du dossier de campagne (modifiable dans l'interface, onglet Textes) :
+    #   { "adresse@x.fr": { "1": "texte du Mail1", "3": "texte du Mail3" } }
+    # Renvoie @{ adresse (minuscules) = @{ etape (int) = texte } }.
+    param([string]$Dossier)
+    $resultat = @{}
+    $f = Join-Path $Dossier "Textes\personnalises.json"
+    if (Test-Path $f) {
+        $j = Get-Content $f -Raw -Encoding UTF8 | ConvertFrom-Json   # fichier illisible : erreur explicite, pas de texte commun a la place
+        foreach ($p in $j.PSObject.Properties) {
+            $etapes = @{}
+            foreach ($e in $p.Value.PSObject.Properties) {
+                if (-not [string]::IsNullOrWhiteSpace([string]$e.Value)) { $etapes[[int]$e.Name] = [string]$e.Value }
+            }
+            if ($etapes.Count) { $resultat[$p.Name.Trim().ToLower()] = $etapes }
+        }
+    }
+    return $resultat
+}
+
+function Get-TexteDuContact {
+    # Texte a utiliser pour ce contact a cette etape : son texte personnalise s'il en a un, sinon le
+    # texte commun. Renvoie aussi d'ou il vient (pour le journal) et pourquoi il n'est pas utilisable.
+    param([string]$Commun, [hashtable]$Personnalises, [string]$Email, [int]$Etape)
+    $cle = ([string]$Email).Trim().ToLower()
+    if ($cle -and $Personnalises.ContainsKey($cle) -and $Personnalises[$cle].ContainsKey($Etape)) {
+        $texte = $Personnalises[$cle][$Etape]; $source = "texte personnalise"
+    } else {
+        $texte = $Commun; $source = "texte commun"
+    }
+    $probleme = $null
+    if ([string]::IsNullOrWhiteSpace($texte)) { $probleme = "$source absent" }
+    elseif ($texte -match '\[A COMPLETER\]') { $probleme = "$source encore marque [A COMPLETER]" }
+    return [pscustomobject]@{ Texte = $texte; Source = $source; Probleme = $probleme }
+}
+
 function Resolve-Variables {
     # Remplace {{CIVILITE}}, {{PRENOM}}, {{NOM}}, {{ENTREPRISE}} par les valeurs du contact (corps et objets).
     # .Replace (texte litteral) et non -replace : avec -replace, un "$" dans une valeur ("$_", "$1"...)

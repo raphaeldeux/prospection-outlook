@@ -109,6 +109,7 @@ foreach ($dossier in $dossiers) {
     $delai = if ($MinJours -ge 0) { $MinJours } else { Get-DelaiRelance $dossier.FullName }
     $delais[$dossier.Name] = $delai
     $issues = Get-Issues $dossier.FullName
+    $perso = try { Get-TextesPersonnalises $dossier.FullName } catch { @{} }   # fichier abime : le suivi reste lisible
     $contacts = @(Import-Csv -Path (Join-Path $dossier.FullName "contacts.csv") -Delimiter ';' -Encoding UTF8)
     foreach ($contact in $contacts) {
         # lignes vides du CSV (ex. lignes ajoutees par Excel en fin de fichier)
@@ -191,6 +192,8 @@ foreach ($dossier in $dossiers) {
             IssueLe          = if ($issue) { [string]$issue.Le } else { "" }
             RelancePossibleLe = $relanceLe
             JoursDepuisEnvoi = $ilYA
+            # etapes pour lesquelles ce contact a un texte personnalise (affiche dans l'interface)
+            TextesPerso      = @(if ($email -and $perso.ContainsKey($email)) { @($perso[$email].Keys | Sort-Object) })
         })
     }
 }

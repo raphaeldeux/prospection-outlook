@@ -20,6 +20,7 @@ const plan = [
       { id: "objets", titre: "Les objets des mails" },
       { id: "contacts", titre: "Ajouter des contacts" },
       { id: "textes", titre: "Rédiger les mails" },
+      { id: "personnalises", titre: "Un texte différent pour un contact" },
       { id: "regles", titre: "Les règles à respecter" },
     ],
   },
@@ -306,6 +307,36 @@ export function Guide() {
             </ul>
           </Section>
 
+          <Section id="personnalises" titre="Un texte différent pour un contact">
+            <p>
+              Pour n'importe quelle étape (Mail1 à Mail4), un contact peut recevoir un <strong>texte entièrement différent</strong>{" "}
+              du texte commun.
+            </p>
+            <ol className="list-decimal space-y-1.5 pl-5">
+              <li>Onglet <strong>Textes des mails</strong>, choisis l'étape.</li>
+              <li>
+                Dans la liste <strong>« Texte de … pour »</strong>, remplace « tous les contacts » par le contact voulu.
+              </li>
+              <li>
+                Clique sur <strong>Écrire un texte pour …</strong> : le texte commun est recopié comme point de départ. Modifie-le
+                librement (les variables fonctionnent toujours), puis <strong>Enregistrer</strong>.
+              </li>
+            </ol>
+            <ul className="list-disc space-y-1 pl-5">
+              <li>Ce contact reçoit son texte ; tous les autres gardent le texte commun. L'objet du mail ne change pas.</li>
+              <li>
+                Les contacts concernés sont listés sous le texte commun, marqués « perso » dans les onglets d'étape, et signalés
+                dans le suivi (« Texte perso : Mail1, Mail3 »).
+              </li>
+              <li><strong>Revenir au texte commun</strong> supprime son texte personnalisé.</li>
+            </ul>
+            <Attention>
+              Le texte personnalisé est rattaché à l'<strong>adresse e-mail</strong> du contact : si tu changes son adresse, il
+              reçoit de nouveau le texte commun. L'ancien texte reste visible dans la liste (« n'est plus dans les contacts ») pour
+              le recopier ou le supprimer.
+            </Attention>
+          </Section>
+
           <Section id="regles" titre="Les règles à respecter">
             <Attention>
               <p className="font-medium text-amber-700 dark:text-amber-300">Une fois la campagne lancée</p>
@@ -416,8 +447,8 @@ export function Guide() {
           <Section id="maj" titre="Mettre à jour l'outil">
             <p>
               Va dans <strong>Paramètres</strong> (en bas à gauche) : version installée, nouveautés, et bouton{" "}
-              <strong>Mettre à jour</strong>. La mise à jour prend une quinzaine de secondes, ne touche jamais à tes campagnes, et
-              l'interface redémarre seule. Une pastille signale quand une nouvelle version est disponible.
+              <strong>Mettre à jour</strong>. La mise à jour prend environ une minute, ne touche jamais à tes campagnes, et
+              l'interface redémarre seule : la page se recharge d'elle-même sur la nouvelle version. Une pastille signale quand une nouvelle version est disponible.
             </p>
             <p>
               Seules les <strong>versions publiées</strong> (releases v1.7.0, v1.8.0…) sont installées, jamais un travail en cours.

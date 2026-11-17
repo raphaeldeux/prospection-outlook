@@ -23,6 +23,8 @@ export type Contact = {
   Issue?: string
   IssueNote?: string
   IssueLe?: string
+  /** Étapes pour lesquelles ce contact a un texte personnalisé */
+  TextesPerso?: number[]
 }
 
 export type EtatTexte = "pret" | "a_completer" | "absent"
@@ -47,7 +49,7 @@ function rechargerApresRedemarrage() {
   rechargementPrevu = true
   const essayer = async () => {
     try {
-      const r = await fetch("/api/version", { headers: entetes })
+      const r = await fetch("/api/version?local=1", { headers: entetes })
       if (r.ok) return window.location.reload()
     } catch {
       /* serveur pas encore prêt */
@@ -106,13 +108,20 @@ export async function ouvrirDossier(campagne: string) {
 }
 
 export type LigneContact = Record<string, string>
-export type Fichiers = { colonnes: string[]; contacts: LigneContact[]; textes: { etape: number; contenu: string }[] }
+/** Texte propre à un contact pour une étape : remplace le texte commun pour lui seul */
+export type TextePersonnalise = { email: string; etape: number; contenu: string }
+export type Fichiers = {
+  colonnes: string[]
+  contacts: LigneContact[]
+  textes: { etape: number; contenu: string }[]
+  personnalises: TextePersonnalise[]
+}
 
 export async function chargerFichiers(campagne: string): Promise<Fichiers> {
   const f = await lire<Fichiers>(
     await fetch("/api/fichiers", { method: "POST", headers: entetes, body: JSON.stringify({ campagne }) }),
   )
-  return { colonnes: tableau(f.colonnes), contacts: tableau(f.contacts), textes: tableau(f.textes) }
+  return { colonnes: tableau(f.colonnes), contacts: tableau(f.contacts), textes: tableau(f.textes), personnalises: tableau(f.personnalises) }
 }
 
 export async function enregistrerContacts(campagne: string, colonnes: string[], contacts: LigneContact[]) {
@@ -121,9 +130,10 @@ export async function enregistrerContacts(campagne: string, colonnes: string[], 
   )
 }
 
-export async function enregistrerTexte(campagne: string, etape: number, contenu: string) {
+/** Enregistre le texte commun d'une étape, ou (email) le texte personnalisé d'un contact ; texte personnalisé vide = retour au texte commun */
+export async function enregistrerTexte(campagne: string, etape: number, contenu: string, email?: string) {
   return lire<{ ok: boolean }>(
-    await fetch("/api/texte", { method: "PUT", headers: entetes, body: JSON.stringify({ campagne, etape, contenu }) }),
+    await fetch("/api/texte", { method: "PUT", headers: entetes, body: JSON.stringify({ campagne, etape, contenu, email }) }),
   )
 }
 
@@ -163,11 +173,13 @@ export type InfosVersion = {
   aJour: boolean | null
   release: { nom: string; notes: string; url: string; date: string } | null
   dossier: string
+  /** Identifiant du démarrage du serveur : change quand le serveur redémarre */
+  instance?: string
 }
 
-/** Version installée et dernière version publiée (null si GitHub injoignable) */
-export async function chargerVersion(): Promise<InfosVersion> {
-  return lire<InfosVersion>(await fetch("/api/version", { headers: entetes }))
+/** Version installée et dernière version publiée (null si GitHub injoignable). locale : sans interroger GitHub */
+export async function chargerVersion(locale = false): Promise<InfosVersion> {
+  return lire<InfosVersion>(await fetch(locale ? "/api/version?local=1" : "/api/version", { headers: entetes }))
 }
 
 /** Lance la mise à jour : le serveur s'arrête, l'installeur tourne, puis l'interface redémarre */

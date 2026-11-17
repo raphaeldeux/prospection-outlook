@@ -1,5 +1,6 @@
 # Cree les brouillons Mail1 (invitation initiale) DIRECTEMENT dans Outlook (comme Build-Relance.ps1
-# pour Mail2/3/4), a partir de Contacts\contacts.csv + Textes\Mail1.txt.
+# pour Mail2/3/4), a partir de contacts.csv + Textes\Mail1.txt (texte commun), ou du texte personnalise
+# du contact s'il en a un (Textes\personnalises.json, cf. Get-TextesPersonnalises dans Commun.ps1).
 #
 # Contrairement a Build-ProspectionEml.ps1 (qui genere des .eml a importer a la main), ce script pilote
 # Outlook en COM : il cree un vrai brouillon, avec la signature par defaut incluse. Rien n'est envoye.
@@ -27,7 +28,6 @@ if (-not (Test-Path $Campagne)) { throw "Dossier de campagne introuvable : $Camp
 $csvPath   = Join-Path $Campagne "contacts.csv"
 $bodyPath  = Join-Path $Campagne "Textes\Mail1.txt"
 if (-not (Test-Path $csvPath))  { throw "Fichier introuvable : $csvPath" }
-if (-not (Test-Path $bodyPath)) { throw "Fichier introuvable : $bodyPath" }
 
 function Set-CorpsAvantSignature {
     # Insere $BodyHtml a la place des lignes vides qu'Outlook place avant la signature
@@ -100,10 +100,10 @@ function Get-SignatureDepuisDisque {
     return $html
 }
 
-$bodyTemplate = Get-Content -Path $bodyPath -Raw -Encoding UTF8
-if ($bodyTemplate -match '\[A COMPLETER\]') {
-    throw "Le texte $bodyPath contient encore le marqueur [A COMPLETER] : redige le contenu du mail avant de lancer la generation."
-}
+# Texte commun (peut manquer si tous les contacts ont un texte personnalise) et textes personnalises :
+# le texte de chaque contact est verifie dans la boucle ([A COMPLETER], absent)
+$bodyTemplate = if (Test-Path $bodyPath) { Get-Content -Path $bodyPath -Raw -Encoding UTF8 } else { "" }
+$textesPerso = Get-TextesPersonnalises $Campagne
 $contacts = @(Import-Csv -Path $csvPath -Delimiter ';' -Encoding UTF8)  # @() force un tableau meme avec 1 seule ligne
 
 Write-Host "Connexion a Outlook..."
@@ -159,7 +159,12 @@ for ($i = 0; $i -lt $contacts.Count; $i++) {
         continue
     }
 
-    $bodyForContact = Resolve-Variables -Texte $bodyTemplate -Contact $contact
+    $modele = Get-TexteDuContact -Commun $bodyTemplate -Personnalises $textesPerso -Email $email -Etape 1
+    if ($modele.Probleme) {
+        Write-Host "[$($contact.Nom)] $($modele.Probleme) - ignore (redige le texte dans l'onglet Textes)." -ForegroundColor Yellow
+        continue
+    }
+    $bodyForContact = Resolve-Variables -Texte $modele.Texte -Contact $contact
     $bodyHtml = Convert-MarkdownLiteToHtml -lines ($bodyForContact -split "`r?`n")
 
     $mail = $outlook.CreateItem(0)  # olMailItem, pas de GetInspector ici : pas de fenetre ouverte
@@ -175,7 +180,7 @@ for ($i = 0; $i -lt $contacts.Count; $i++) {
     $mail.HTMLBody = Set-CorpsAvantSignature -HtmlSignature $signatureHtml -BodyHtml $bodyHtml
     $mail.Save()
 
-    Write-Host "[$($contact.Nom)] Mail1 cree (brouillon) - objet : $sujetPropre"
+    Write-Host "[$($contact.Nom)] Mail1 cree (brouillon, $($modele.Source)) - objet : $sujetPropre"
 }
 
 Write-Host "Termine. Verifie le dossier Brouillons d'Outlook."

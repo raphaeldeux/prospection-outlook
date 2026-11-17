@@ -13,6 +13,7 @@ import {
   RefreshCwIcon,
   SaveIcon,
   TimerIcon,
+  PenLineIcon,
   TriangleAlertIcon,
   UsersIcon,
 } from "lucide-react"
@@ -547,6 +548,7 @@ function VueCampagne(props: {
               key={campagne.Nom}
               campagne={campagne.Nom}
               textes={fichiers.textes}
+              personnalises={fichiers.personnalises}
               contacts={fichiers.contacts}
               etape={props.etapeTexte}
               setEtape={props.setEtapeTexte}
@@ -572,7 +574,8 @@ function VueCampagne(props: {
                   {e.brouillons > 0 && ` · ${e.brouillons} brouillon(s) à envoyer`}
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-2">
+              {/* flex-1 + mt-auto : les boutons restent alignés en bas des 4 cartes, quelle que soit la longueur du message */}
+              <CardContent className="flex flex-1 flex-col gap-2">
                 {e.prevus === 0 && contacts.length > 0 ? (
                   <p className="text-xs text-muted-foreground">
                     Étape non prévue (aucun objet Mail{e.n}).{" "}
@@ -591,16 +594,18 @@ function VueCampagne(props: {
                     {e.enAttente > 0 && ` · ${e.enAttente} en attente du délai de ${campagne.DelaiRelance} j`}
                   </p>
                 )}
-                <div className="flex gap-2">
+                <div className="mt-auto flex gap-2">
                   <Button
                     size="sm"
-                    className="flex-1"
+                    className="min-w-0 flex-1"
                     variant={e.aCreer > 0 && !bloque ? "default" : "outline"}
                     disabled={bloque || e.prevus === 0 || enCours !== null}
                     onClick={() => props.onGenerer(e.n, e.aCreer, e.raison)}
+                    title="Créer les brouillons"
                   >
                     {enCours === e.n ? <Loader2Icon className="animate-spin" /> : <MailPlusIcon />}
-                    {enCours === e.n ? "Création…" : "Créer les brouillons"}
+                    {/* truncate : sur une carte étroite, le libellé se raccourcit au lieu de pousser le bouton Texte hors de la carte */}
+                    <span className="truncate">{enCours === e.n ? "Création…" : "Créer les brouillons"}</span>
                   </Button>
                   <Button
                     size="sm"
@@ -667,6 +672,11 @@ function VueCampagne(props: {
                 <TableCell className="pl-4">
                   <div className="font-medium">{nomAffiche(c)}</div>
                   <div className="text-xs text-muted-foreground">{c.Email || "adresse manquante"}</div>
+                  {(c.TextesPerso?.length ?? 0) > 0 && (
+                    <div className="mt-0.5 flex items-center gap-1 text-xs text-sky-700 dark:text-sky-400">
+                      <PenLineIcon className="size-3" /> Texte perso : {c.TextesPerso!.map((n) => `Mail${n}`).join(", ")}
+                    </div>
+                  )}
                 </TableCell>
                 <TableCell>{c.Entreprise}</TableCell>
                 {[1, 2, 3, 4].map((n) => (

@@ -30,6 +30,8 @@ export function Parametres(props: { modifsEnCours: boolean }) {
   const [infos, setInfos] = useState<InfosVersion | null>(null)
   const [chargement, setChargement] = useState(false)
   const [miseAJour, setMiseAJour] = useState(false)
+  /** La mise à jour dure plus longtemps que prévu : on propose de recharger à la main */
+  const [lente, setLente] = useState(false)
 
   async function verifier() {
     setChargement(true)
@@ -48,31 +50,40 @@ export function Parametres(props: { modifsEnCours: boolean }) {
   async function mettreAJour() {
     if (props.modifsEnCours && !window.confirm("Des modifications ne sont pas enregistrées et seront perdues. Continuer ?")) return
     setMiseAJour(true)
+    setLente(false)
+    // Etat du serveur AVANT la mise à jour : on reconnaîtra le nouveau serveur à son identifiant de démarrage
+    let avant: InfosVersion | null = null
     try {
+      avant = await chargerVersion(true)
       await lancerMiseAJour()
     } catch (e) {
       toast.error((e as Error).message)
       setMiseAJour(false)
       return
     }
-    // Le serveur s'arrête puis redémarre après l'installation : on attend qu'il réponde avec la nouvelle version
-    const cible = infos?.publiee?.version
+    // Le serveur s'arrête, l'installeur tourne, puis l'interface redémarre : dès que le NOUVEAU serveur
+    // répond (identifiant de démarrage ou version différents), on recharge la page pour afficher la nouvelle version.
+    // Pas de comparaison avec la version annoncée : elle peut différer (format, GitHub injoignable, réinstallation).
     const debut = Date.now()
-    await new Promise((r) => setTimeout(r, 5000))
-    while (Date.now() - debut < 5 * 60 * 1000) {
+    let serveurArrete = false
+    await new Promise((r) => setTimeout(r, 3000))
+    for (;;) {
       try {
-        const v = await chargerVersion()
-        if (!cible || v.installee?.version === cible) {
+        const v = await chargerVersion(true)
+        const nouveau =
+          serveurArrete ||
+          (v.instance !== undefined && v.instance !== avant?.instance) ||
+          v.installee?.version !== avant?.installee?.version
+        if (nouveau) {
           window.location.reload()
           return
         }
       } catch {
-        /* serveur en cours de redémarrage */
+        serveurArrete = true // serveur en cours de redémarrage : la prochaine réponse viendra du nouveau
       }
-      await new Promise((r) => setTimeout(r, 3000))
+      if (Date.now() - debut > 2 * 60 * 1000) setLente(true)
+      await new Promise((r) => setTimeout(r, 2000))
     }
-    setMiseAJour(false)
-    toast.error("La mise à jour prend plus de temps que prévu. Regarde la fenêtre « Mise à jour de Prospection Outlook ».")
   }
 
   const v = infos
@@ -91,6 +102,28 @@ export function Parametres(props: { modifsEnCours: boolean }) {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {miseAJour && (
+            <div role="status" className="flex gap-3 rounded-lg border border-sky-300 bg-sky-50 p-3 dark:border-sky-900 dark:bg-sky-950/40">
+              <Loader2Icon className="mt-0.5 size-4 shrink-0 animate-spin" />
+              <div className="space-y-1 text-sm">
+                <p className="font-medium">Mise à jour en cours…</p>
+                <p className="text-muted-foreground">
+                  Une fenêtre « Mise à jour de Prospection Outlook » s'ouvre et se ferme toute seule. Ne ferme pas cette page :
+                  elle se rechargera automatiquement sur la nouvelle version (environ une minute).
+                </p>
+                {lente && (
+                  <div className="space-y-2 pt-1">
+                    <p className="text-amber-700 dark:text-amber-300">
+                      C'est plus long que prévu. Si la fenêtre de mise à jour est fermée, recharge la page.
+                    </p>
+                    <Button size="sm" variant="outline" onClick={() => window.location.reload()}>
+                      <RefreshCwIcon /> Recharger la page
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
           {!v ? (
             <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2Icon className="size-4 animate-spin" /> Vérification…</p>
           ) : (
