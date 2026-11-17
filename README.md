@@ -13,6 +13,18 @@ Tout se fait depuis une interface web locale :
 - création des brouillons en un clic ;
 - guide d'utilisation intégré.
 
+## Aperçu
+
+**La page « À faire »** résume toutes les campagnes : mails à préparer, brouillons à envoyer, réponses à traiter.
+
+![Page « À faire » : mails à préparer, brouillons à envoyer et réponses à traiter](docs/images/a-faire.png)
+
+**Le suivi d'une campagne** montre, contact par contact, les mails envoyés, les réponses et la prochaine action, avec la création des brouillons étape par étape.
+
+![Suivi d'une campagne : étapes, statuts et actions par contact](docs/images/campagne.png)
+
+*Captures réalisées avec des données fictives.*
+
 ## Installation (utilisateurs)
 
 Prérequis : Windows et **Outlook classique** (pas le « nouvel Outlook »), avec une signature par défaut. Rien d'autre : l'outil est **portable**. Il ne demande ni droits administrateur ni installation dans Windows, et n'a pas besoin de Node.js pour fonctionner.
