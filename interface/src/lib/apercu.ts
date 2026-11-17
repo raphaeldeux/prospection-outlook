@@ -1,9 +1,10 @@
 import type { LigneContact } from "@/lib/api"
 
-/** Remplace {{CIVILITE}}, {{NOM}}, {{ENTREPRISE}} comme le font les scripts PowerShell */
+/** Remplace {{CIVILITE}}, {{PRENOM}}, {{NOM}}, {{ENTREPRISE}} comme le font les scripts PowerShell */
 export function resoudreVariables(texte: string, contact?: LigneContact) {
   return texte
     .replaceAll("{{CIVILITE}}", contact?.Civilite || "Madame")
+    .replaceAll("{{PRENOM}}", contact?.Prenom || "Claire")
     .replaceAll("{{NOM}}", contact?.Nom || "Martin")
     .replaceAll("{{ENTREPRISE}}", contact?.Entreprise || "Entreprise")
 }

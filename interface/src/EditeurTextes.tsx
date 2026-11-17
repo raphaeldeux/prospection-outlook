@@ -105,7 +105,7 @@ export function EditeurTextes(props: {
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex flex-wrap gap-1">
-              {["CIVILITE", "NOM", "ENTREPRISE"].map((v) => (
+              {["CIVILITE", "PRENOM", "NOM", "ENTREPRISE"].map((v) => (
                 <Button key={v} size="xs" variant="outline" onClick={() => inserer(`{{${v}}}`)} title={`Insérer la variable ${v}`}>
                   {`{{${v}}}`}
                 </Button>

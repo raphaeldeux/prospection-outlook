@@ -2,6 +2,7 @@ export type Code = "repondu" | "brouillon" | "afaire" | "relance" | "attente" | 
 
 export type Contact = {
   Civilite: string
+  Prenom?: string
   Nom: string
   Entreprise: string
   Email: string

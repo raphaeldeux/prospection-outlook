@@ -140,11 +140,12 @@ function Get-SujetAvecSuffixeInvisible {
 }
 
 function Resolve-Variables {
-    # Remplace les variables {{CIVILITE}}, {{NOM}}, {{ENTREPRISE}} par les valeurs du contact.
+    # Remplace les variables {{CIVILITE}}, {{PRENOM}}, {{NOM}}, {{ENTREPRISE}} par les valeurs du contact.
     # Utilisable aussi bien sur le corps du mail que sur l'objet (colonnes SujetN).
     param([string]$Texte, $Contact)
     return $Texte `
         -replace '\{\{CIVILITE\}\}', $Contact.Civilite `
+        -replace '\{\{PRENOM\}\}', $Contact.Prenom `
         -replace '\{\{NOM\}\}', $Contact.Nom `
         -replace '\{\{ENTREPRISE\}\}', $Contact.Entreprise
 }

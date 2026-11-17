@@ -51,6 +51,7 @@ function Resolve-Variables {
     param([string]$Texte, $Contact)
     return $Texte `
         -replace '\{\{CIVILITE\}\}', $Contact.Civilite `
+        -replace '\{\{PRENOM\}\}', $Contact.Prenom `
         -replace '\{\{NOM\}\}', $Contact.Nom `
         -replace '\{\{ENTREPRISE\}\}', $Contact.Entreprise
 }
@@ -203,6 +204,7 @@ foreach ($dossier in $dossiers) {
         $resultats.Add([pscustomobject]@{
             Campagne   = $dossier.Name
             Civilite   = $contact.Civilite
+            Prenom     = $contact.Prenom
             Nom        = $contact.Nom
             Entreprise = $contact.Entreprise
             Email      = $contact.Email

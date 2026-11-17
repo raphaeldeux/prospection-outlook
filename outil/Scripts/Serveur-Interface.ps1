@@ -71,7 +71,7 @@ function Get-DossierCampagne {
     return $null
 }
 
-$colonnesStandard = @("Civilite", "Nom", "Entreprise", "Telephone", "Email", "Sujet1", "Sujet2", "Sujet3", "Sujet4")
+$colonnesStandard = @("Civilite", "Prenom", "Nom", "Entreprise", "Telephone", "Email", "Sujet1", "Sujet2", "Sujet3", "Sujet4")
 $utf8Bom = New-Object System.Text.UTF8Encoding $true   # BOM : Excel affiche correctement les accents
 
 function Read-Corps { param($Req) (New-Object IO.StreamReader($Req.InputStream, $utf8)).ReadToEnd() | ConvertFrom-Json }

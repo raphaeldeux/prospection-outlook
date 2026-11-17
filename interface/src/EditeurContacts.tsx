@@ -13,14 +13,15 @@ import {
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
+import { ImportContacts } from "@/ImportContacts"
 import { enregistrerContacts, type LigneContact } from "@/lib/api"
 import { estEmailValide } from "@/lib/apercu"
+import { normaliserCivilite } from "@/lib/import"
 import { cn } from "@/lib/utils"
 
-const ordreCollage = ["Civilite", "Nom", "Entreprise", "Telephone", "Email", "Sujet1", "Sujet2", "Sujet3", "Sujet4"]
 const libelleColonne: Record<string, string> = {
   Civilite: "Civilité",
+  Prenom: "Prénom",
   Nom: "Nom",
   Entreprise: "Entreprise",
   Telephone: "Téléphone",
@@ -32,6 +33,7 @@ const libelleColonne: Record<string, string> = {
 }
 const largeur: Record<string, string> = {
   Civilite: "w-28",
+  Prenom: "w-32",
   Nom: "w-40",
   Entreprise: "w-44",
   Telephone: "w-32",
@@ -61,7 +63,7 @@ export function EditeurContacts(props: {
   const [reference, setReference] = useState(JSON.stringify(props.contacts))
   const [sauvegarde, setSauvegarde] = useState(false)
   const [aSupprimer, setASupprimer] = useState<number | null>(null)
-  const [collage, setCollage] = useState<string | null>(null)
+  const [importOuvert, setImportOuvert] = useState(false)
   const [objets, setObjets] = useState<string[]>(() =>
     [1, 2, 3, 4].map((n) => plusFrequent(props.contacts.map((c) => c[`Sujet${n}`] ?? ""))),
   )
@@ -97,7 +99,7 @@ export function EditeurContacts(props: {
       for (const n of etapes) {
         sensibles.add(`Sujet${n}`)
         const objet = o[`Sujet${n}`] ?? ""
-        ;(["Civilite", "Nom", "Entreprise"] as const).forEach((v) => objet.includes(`{{${v.toUpperCase()}}}`) && sensibles.add(v))
+        ;(["Civilite", "Prenom", "Nom", "Entreprise"] as const).forEach((v) => objet.includes(`{{${v.toUpperCase()}}}`) && sensibles.add(v))
       }
       const cols = new Set([...sensibles].filter((c) => (l[c] ?? "").trim() !== (o[c] ?? "").trim()))
       if (cols.size) parLigne.set(i, { cols, etapes })
@@ -129,22 +131,62 @@ export function EditeurContacts(props: {
     setObjets([1, 2, 3, 4].map((n) => plusFrequent(ref.map((c) => c[`Sujet${n}`] ?? ""))))
   }
 
-  function coller(texte: string) {
-    const nouvelles = texte
-      .split(/\r?\n/)
-      .filter((l) => l.trim())
-      .map((l) => l.split(l.includes("\t") ? "\t" : ";").map((v) => v.trim()))
-      .filter((v) => !(v[0]?.toLowerCase().startsWith("civilit") && v[1]?.toLowerCase() === "nom")) // en-tête ignorée
-      .map((v) => {
-        const l = ligneVide(colonnes)
-        ordreCollage.forEach((c, k) => (l[c] = v[k] ?? ""))
-        // objets vides : on reprend les objets communs
-        ;[1, 2, 3, 4].forEach((n) => !l[`Sujet${n}`] && (l[`Sujet${n}`] = objets[n - 1]))
-        return l
-      })
+  const ligneAvecObjets = (): LigneContact => ({
+    ...ligneVide(colonnes),
+    ...Object.fromEntries(objets.map((o, k) => [`Sujet${k + 1}`, o])),
+  })
+
+  function ajouterEnMasse(nouvelles: LigneContact[]) {
     setLignes((ls) => [...ls, ...nouvelles])
-    setCollage(null)
-    toast.success(`${nouvelles.length} contact(s) ajouté(s) en fin de liste. Pense à enregistrer.`)
+    toast.success(`${nouvelles.length} contact(s) ajouté(s) en fin de liste. Enregistre pour les garder.`)
+  }
+
+  const emailsExistants = useMemo(
+    () => new Set(lignes.map((l) => (l.Email ?? "").trim().toLowerCase()).filter(Boolean)),
+    [lignes],
+  )
+
+  /**
+   * Collage direct dans le tableau, comme dans Excel : un bloc de plusieurs cellules (lignes / colonnes
+   * séparées par des retours et des tabulations) remplit le tableau à partir de la case choisie.
+   */
+  function collerDansTableau(e: React.ClipboardEvent, i: number, col: string) {
+    const texte = e.clipboardData.getData("text/plain").replace(/\r/g, "").replace(/\n$/, "")
+    if (!texte.includes("\t") && !texte.includes("\n")) return // simple valeur : collage normal
+    e.preventDefault()
+    const blocs = texte.split("\n").map((l) => l.split("\t"))
+    const depart = colonnes.indexOf(col)
+    setLignes((ls) => {
+      const r = [...ls]
+      blocs.forEach((valeurs, k) => {
+        while (r.length <= i + k) r.push(ligneAvecObjets())
+        const ligne = { ...r[i + k] }
+        valeurs.forEach((v, j) => {
+          const c = colonnes[depart + j]
+          if (!c) return
+          let val = v.trim()
+          if (c === "Civilite") val = normaliserCivilite(val)
+          if (c === "Email") val = val.toLowerCase()
+          ligne[c] = val
+        })
+        r[i + k] = ligne
+      })
+      return r
+    })
+    toast.success(`${blocs.length} ligne(s) collée(s) à partir de la ligne ${i + 1}`)
+  }
+
+  /** Entrée : passe à la même case de la ligne suivante (en créant une ligne au besoin) */
+  function toucheCase(e: React.KeyboardEvent, i: number, col: string) {
+    if (e.key !== "Enter") return
+    e.preventDefault()
+    const suivante = i + 1
+    if (suivante >= lignes.length) setLignes((ls) => [...ls, ligneAvecObjets()])
+    setTimeout(() => {
+      const el = document.querySelector<HTMLElement>(`[data-case="${suivante}-${col}"]`)
+      el?.focus()
+      if (el instanceof HTMLInputElement) el.select()
+    }, 0)
   }
 
   async function enregistrer(forcer = false) {
@@ -174,8 +216,8 @@ export function EditeurContacts(props: {
         <CardHeader>
           <CardTitle className="text-sm">Objets des mails</CardTitle>
           <CardDescription>
-            L'objet saisi ici s'applique directement à tous les contacts. Les variables {"{{CIVILITE}}"}, {"{{NOM}}"} et{" "}
-            {"{{ENTREPRISE}}"} sont remplacées pour chaque contact. Un objet vide arrête la séquence à cette étape.
+            L'objet saisi ici s'applique directement à tous les contacts. Les variables {"{{CIVILITE}}"}, {"{{PRENOM}}"},{" "}
+            {"{{NOM}}"} et {"{{ENTREPRISE}}"} sont remplacées pour chaque contact. Un objet vide arrête la séquence à cette étape.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
@@ -225,9 +267,13 @@ export function EditeurContacts(props: {
       </Card>
 
       <div className="flex flex-wrap items-center gap-2">
+        <p className="text-xs text-muted-foreground">
+          Astuce : colle un bloc copié depuis Excel directement dans une case du tableau. <kbd>Entrée</kbd> passe à la ligne
+          suivante.
+        </p>
         <div className="flex-1" />
-        <Button variant="outline" onClick={() => setCollage("")}><ClipboardPasteIcon /> Coller depuis Excel</Button>
-        <Button variant="outline" onClick={() => setLignes((ls) => [...ls, { ...ligneVide(colonnes), ...Object.fromEntries(objets.map((o, k) => [`Sujet${k + 1}`, o])) }])}>
+        <Button onClick={() => setImportOuvert(true)}><ClipboardPasteIcon /> Ajouter en masse</Button>
+        <Button variant="outline" onClick={() => setLignes((ls) => [...ls, ligneAvecObjets()])}>
           <PlusIcon /> Ajouter un contact
         </Button>
       </div>
@@ -280,7 +326,7 @@ export function EditeurContacts(props: {
               {lignes.length === 0 && (
                 <tr>
                   <td colSpan={colonnes.length + 2} className="py-10 pl-4 text-left text-muted-foreground">
-                    Aucun contact. Ajoute-les un par un, ou colle-les depuis Excel.
+                    Aucun contact. Clique sur « Ajouter en masse » pour coller une liste depuis Excel ou Outlook.
                   </td>
                 </tr>
               )}
@@ -298,6 +344,9 @@ export function EditeurContacts(props: {
                       >
                         {c === "Civilite" ? (
                           <select
+                            data-case={`${i}-${c}`}
+                            onKeyDown={(e) => toucheCase(e, i, c)}
+                            onPaste={(e) => collerDansTableau(e, i, c)}
                             className="h-7 w-full rounded-md border border-transparent bg-transparent px-1 text-sm hover:border-input focus:border-ring"
                             value={l[c] ?? ""}
                             onChange={(e) => modifier(i, c, e.target.value)}
@@ -309,6 +358,9 @@ export function EditeurContacts(props: {
                           </select>
                         ) : (
                           <Input
+                            data-case={`${i}-${c}`}
+                            onKeyDown={(e) => toucheCase(e, i, c)}
+                            onPaste={(e) => collerDansTableau(e, i, c)}
                             value={l[c] ?? ""}
                             onChange={(e) => modifier(i, c, e.target.value)}
                             aria-invalid={invalide || undefined}
@@ -391,28 +443,14 @@ export function EditeurContacts(props: {
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={collage !== null} onOpenChange={(o) => !o && setCollage(null)}>
-        <AlertDialogContent className="data-[size=default]:max-w-2xl data-[size=default]:sm:max-w-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Coller des contacts depuis Excel</AlertDialogTitle>
-            <AlertDialogDescription>
-              Copie les lignes dans Excel puis colle-les ici. Ordre des colonnes : Civilité, Nom, Entreprise, Téléphone, E-mail (puis
-              éventuellement les 4 objets). Sans objets, ceux définis plus haut sont utilisés.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <Textarea
-            autoFocus
-            value={collage ?? ""}
-            onChange={(e) => setCollage(e.target.value)}
-            className="min-h-48 font-mono text-xs"
-            placeholder={"Madame\tMartin\tACME\t\tclaire.martin@acme.fr"}
-          />
-          <AlertDialogFooter>
-            <AlertDialogCancel>Annuler</AlertDialogCancel>
-            <Button disabled={!collage?.trim()} onClick={() => collage && coller(collage)}>Ajouter à la liste</Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ImportContacts
+        ouvert={importOuvert}
+        onFermer={() => setImportOuvert(false)}
+        colonnesFichier={colonnes}
+        objets={objets}
+        emailsExistants={emailsExistants}
+        onAjouter={ajouterEnMasse}
+      />
     </div>
   )
 }

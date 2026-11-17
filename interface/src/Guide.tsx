@@ -90,12 +90,12 @@ export function Guide() {
       <Section id="campagne" titre="Créer une campagne">
         <ol className="list-decimal space-y-1.5 pl-5">
           <li>
-            Clique sur <strong>Nouvelle campagne</strong> en bas de la liste, et donne-lui un nom daté, par exemple{" "}
-            <Code>2026-11 Souveraineté du cloud</Code>.
+            Clique sur <strong>Nouvelle campagne</strong> en bas de la liste : donne un titre (par exemple « Souveraineté du
+            cloud ») et choisis le mois et l'année de lancement.
           </li>
           <li>
-            Dans l'onglet <strong>Contacts</strong>, définis les objets des mails puis ajoute tes destinataires (un par un, ou
-            en les collant depuis Excel). Enregistre.
+            Dans l'onglet <strong>Contacts</strong>, définis les objets des mails puis ajoute tes destinataires, en masse de
+            préférence (« Ajouter en masse »). Enregistre.
           </li>
           <li>
             Dans l'onglet <strong>Textes des mails</strong>, rédige Mail1 à Mail4 en t'aidant de l'aperçu. Tant qu'un texte
@@ -118,6 +118,7 @@ export function Guide() {
           <table className="w-full text-sm">
             <tbody className="[&_td]:border-b [&_td]:px-3 [&_td]:py-1.5 [&_tr:last-child_td]:border-0">
               <tr><td className="text-foreground">Civilité</td><td>Madame, Monsieur</td></tr>
+              <tr><td className="text-foreground">Prénom</td><td>Prénom (variable {"{{PRENOM}}"})</td></tr>
               <tr><td className="text-foreground">Nom</td><td>Nom de famille</td></tr>
               <tr><td className="text-foreground">Entreprise</td><td>Nom de l'entreprise</td></tr>
               <tr><td className="text-foreground">Téléphone</td><td>Facultatif, pour mémoire</td></tr>
@@ -128,14 +129,33 @@ export function Guide() {
         </div>
         <p>
           <strong>Objets :</strong> en général identiques pour tous. Saisis-les dans le bloc « Objets des mails » : ils
-          s'appliquent directement à tous les contacts. Les variables <Code>{"{{CIVILITE}}"}</Code>, <Code>{"{{NOM}}"}</Code> et{" "}
+          s'appliquent directement à tous les contacts. Les variables <Code>{"{{CIVILITE}}"}</Code>, <Code>{"{{PRENOM}}"}</Code>,{" "}
+          <Code>{"{{NOM}}"}</Code> et{" "}
           <Code>{"{{ENTREPRISE}}"}</Code> sont remplacées pour chaque contact, par exemple{" "}
           <Code>{"[{{ENTREPRISE}} / Wavestone] Discutons cybersécurité"}</Code>. Un objet vide arrête la séquence à cette étape
           pour ce contact.
         </p>
+        <p><strong>Ajouter en masse</strong> (le plus rapide) : clique sur le bouton, colle, vérifie l'aperçu, ajoute. Sont acceptés :</p>
+        <ul className="list-disc space-y-1 pl-5">
+          <li>
+            des lignes copiées depuis <strong>Excel</strong> (ou un CSV), avec ou sans ligne d'en-tête et avec les colonnes
+            dans n'importe quel ordre : les colonnes sont reconnues d'après leur titre ou leur contenu. Une liste en tête de
+            chaque colonne de l'aperçu permet de corriger ;
+          </li>
+          <li>
+            des destinataires copiés depuis <strong>Outlook</strong> (« DUPONT Jean &lt;jean.dupont@acme.fr&gt;; … ») ;
+          </li>
+          <li>une simple <strong>liste d'adresses</strong>.</li>
+        </ul>
         <p>
-          <strong>Coller depuis Excel :</strong> sélectionne tes lignes dans Excel (colonnes dans l'ordre Civilité, Nom,
-          Entreprise, Téléphone, E-mail), copie, puis « Coller depuis Excel ». Les contacts sont ajoutés en fin de liste.
+          Prénom, nom et entreprise manquants sont déduits des adresses de type <Code>prenom.nom@entreprise.fr</Code> (case à
+          décocher si besoin). Les adresses déjà présentes et les adresses invalides sont ignorées, et les objets définis plus
+          haut sont appliqués.
+        </p>
+        <p>
+          Dans le tableau, tu peux aussi <strong>coller directement</strong> un bloc copié depuis Excel dans une case : il
+          remplit les cases à partir de celle-ci, comme dans Excel. <strong>Entrée</strong> passe à la ligne suivante (et en
+          crée une au besoin).
         </p>
         <p>
           Tant que des modifications ne sont pas enregistrées, une barre « Modifications non enregistrées » reste affichée en

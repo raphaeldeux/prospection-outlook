@@ -31,6 +31,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { EditeurContacts } from "@/EditeurContacts"
 import { EditeurTextes } from "@/EditeurTextes"
 import { Guide } from "@/Guide"
+import { NouvelleCampagne } from "@/NouvelleCampagne"
+import { dateCourte, lireNomCampagne } from "@/lib/campagne"
 import {
   chargerFichiers,
   chargerSuivi,
@@ -123,7 +125,7 @@ export default function App() {
     setEnCours(etape)
     try {
       const r = await genererBrouillons(campagne.Nom, etape)
-      setJournal({ titre: `${nomsEtapes[etape]} · ${campagne.Nom}`, texte: r.journal, ok: r.ok })
+      setJournal({ titre: `${nomsEtapes[etape]} · ${lireNomCampagne(campagne.Nom).titre}`, texte: r.journal, ok: r.ok })
       if (r.ok) toast.success("Brouillons créés dans Outlook")
       else toast.error("La création a échoué, voir le journal")
       void actualiser()
@@ -147,7 +149,7 @@ export default function App() {
     try {
       const r = await creerCampagne(nom)
       setNouvelle(null)
-      toast.success(`Campagne « ${r.nom} » créée : remplis ses contacts et ses textes.`)
+      toast.success(`Campagne « ${lireNomCampagne(r.nom).titre} » créée : remplis ses contacts et ses textes.`)
       choisir(r.nom)
       await actualiser()
     } catch (e) {
@@ -176,7 +178,12 @@ export default function App() {
                   campagne?.Nom === c.Nom && "bg-muted font-medium",
                 )}
               >
-                <span className="truncate" title={c.Nom}>{c.Nom}</span>
+                <span className="min-w-0" title={c.Nom}>
+                  <span className="block truncate">{lireNomCampagne(c.Nom).titre}</span>
+                  {lireNomCampagne(c.Nom).date && (
+                    <span className="block text-xs font-normal text-muted-foreground">{dateCourte(lireNomCampagne(c.Nom))}</span>
+                  )}
+                </span>
                 {aTraiter > 0 && (
                   <span
                     title={`${aTraiter} contact(s) à traiter`}
@@ -280,34 +287,7 @@ export default function App() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={nouvelle !== null} onOpenChange={(o) => !o && setNouvelle(null)}>
-        <AlertDialogContent>
-          <form
-            className="contents"
-            onSubmit={(e) => {
-              e.preventDefault()
-              if (nouvelle?.trim()) void valider(nouvelle.trim())
-            }}
-          >
-            <AlertDialogHeader>
-              <AlertDialogTitle>Nouvelle campagne</AlertDialogTitle>
-              <AlertDialogDescription>
-                Un dossier est créé dans Campagnes\ à partir du modèle, avec un fichier de contacts vide.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <Input
-              autoFocus
-              placeholder="2026-12 Souveraineté du cloud"
-              value={nouvelle ?? ""}
-              onChange={(e) => setNouvelle(e.target.value)}
-            />
-            <AlertDialogFooter>
-              <AlertDialogCancel>Annuler</AlertDialogCancel>
-              <Button type="submit" disabled={!nouvelle?.trim()}>Créer</Button>
-            </AlertDialogFooter>
-          </form>
-        </AlertDialogContent>
-      </AlertDialog>
+      <NouvelleCampagne ouvert={nouvelle !== null} onFermer={() => setNouvelle(null)} onCreer={(nom) => void valider(nom)} />
     </div>
   )
 }
@@ -397,7 +377,12 @@ function VueCampagne(props: {
     <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold">{campagne.Nom}</h1>
+          <h1 className="flex flex-wrap items-baseline gap-x-3 text-xl font-semibold">
+            {lireNomCampagne(campagne.Nom).titre}
+            {lireNomCampagne(campagne.Nom).date && (
+              <span className="text-sm font-normal text-muted-foreground">{lireNomCampagne(campagne.Nom).date}</span>
+            )}
+          </h1>
           <p className="text-sm text-muted-foreground">
             {contacts.length} contact(s) · suivi lu dans Outlook le {suivi.GenereLe}
           </p>
@@ -553,7 +538,7 @@ function VueCampagne(props: {
             {visibles.map((c, i) => (
               <TableRow key={`${i}-${c.Email}`}>
                 <TableCell className="pl-4">
-                  <div className="font-medium">{[c.Civilite, c.Nom].filter(Boolean).join(" ")}</div>
+                  <div className="font-medium">{[c.Civilite, c.Prenom, c.Nom].filter(Boolean).join(" ")}</div>
                   <div className="text-xs text-muted-foreground">{c.Email || "adresse manquante"}</div>
                 </TableCell>
                 <TableCell>{c.Entreprise}</TableCell>
