@@ -550,6 +550,9 @@ function VueCampagne(props: {
               textes={fichiers.textes}
               personnalises={fichiers.personnalises}
               contacts={fichiers.contacts}
+              envois={envois}
+              contactsModifies={!!props.modifs.contacts}
+              onVoirContacts={() => setOnglet("contacts")}
               etape={props.etapeTexte}
               setEtape={props.setEtapeTexte}
               onEnregistre={apresEnregistrement}
@@ -654,13 +657,14 @@ function VueCampagne(props: {
               <TableHead className="pl-4">Contact</TableHead>
               <TableHead>Entreprise</TableHead>
               {[1, 2, 3, 4].map((n) => <TableHead key={n}>Mail{n}</TableHead>)}
-              <TableHead className="pr-4">Statut et actions</TableHead>
+              <TableHead>Statut</TableHead>
+              <TableHead className="pr-4">Action</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {visibles.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
                   {contacts.length === 0
                     ? "Aucun contact. Ajoute-les dans l'onglet « Contacts »."
                     : "Aucun contact ne correspond."}
@@ -688,12 +692,14 @@ function VueCampagne(props: {
                     )}
                   </TableCell>
                 ))}
-                <TableCell className="pr-4">
+                <TableCell>
                   <div className="flex flex-col items-start gap-1">
                     <StatutBadge code={c.Code} issue={c.Issue} />
                     <span className="text-xs text-muted-foreground">{detailStatut(c)}</span>
-                    <ActionsContact campagne={campagne.Nom} contact={c} onChange={props.onActualiser} onIssueLocale={props.onIssueLocale} />
                   </div>
+                </TableCell>
+                <TableCell className="pr-4">
+                  <ActionsContact campagne={campagne.Nom} contact={c} onChange={props.onActualiser} onIssueLocale={props.onIssueLocale} />
                 </TableCell>
               </TableRow>
             ))}

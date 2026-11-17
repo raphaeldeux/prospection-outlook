@@ -15,7 +15,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { ImportContacts } from "@/ImportContacts"
 import { enregistrerContacts, type LigneContact } from "@/lib/api"
-import { estEmailValide } from "@/lib/apercu"
+import { estColonneObjet, estEmailValide, objetCommun } from "@/lib/apercu"
 import { normaliserCivilite } from "@/lib/import"
 import { cn } from "@/lib/utils"
 
@@ -41,11 +41,6 @@ const largeur: Record<string, string> = {
 }
 
 const ligneVide = (colonnes: string[]): LigneContact => Object.fromEntries(colonnes.map((c) => [c, ""]))
-const plusFrequent = (valeurs: string[]) => {
-  const n = new Map<string, number>()
-  valeurs.filter(Boolean).forEach((v) => n.set(v, (n.get(v) ?? 0) + 1))
-  return [...n.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? ""
-}
 
 export function EditeurContacts(props: {
   campagne: string
@@ -58,6 +53,9 @@ export function EditeurContacts(props: {
   onModifie: (modifie: boolean) => void
 }) {
   const { colonnes, campagneDemarree } = props
+  // Les objets (Sujet1..4) ne sont pas affichés dans le tableau : objet commun dans le bloc ci-dessous, objet
+  // propre à un contact dans l'onglet Textes. Ils restent dans chaque ligne et sont enregistrés tels quels.
+  const colonnesAffichees = colonnes.filter((c) => !estColonneObjet(c))
   const [confirmerRisques, setConfirmerRisques] = useState(false)
   const [lignes, setLignes] = useState<LigneContact[]>(props.contacts)
   const [reference, setReference] = useState(JSON.stringify(props.contacts))
@@ -67,11 +65,21 @@ export function EditeurContacts(props: {
   // Bloc des objets : replie par defaut quand les objets sont deja definis (gagne de la place pour le tableau)
   const [objetsOuverts, setObjetsOuverts] = useState(false)
   const [objets, setObjets] = useState<string[]>(() =>
-    [1, 2, 3, 4].map((n) => plusFrequent(props.contacts.map((c) => c[`Sujet${n}`] ?? ""))),
+    [1, 2, 3, 4].map((n) => objetCommun(props.contacts, n)),
   )
 
   const modifie = JSON.stringify(lignes) !== reference
   useEffect(() => props.onModifie(modifie), [modifie]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Contacts modifiés ailleurs (objet d'un contact changé dans l'onglet Textes) : on reprend la version
+  // enregistrée, sauf si des modifications sont en cours ici (l'onglet Textes bloque alors ses objets).
+  const recu = JSON.stringify(props.contacts)
+  useEffect(() => {
+    if (modifie || recu === reference) return
+    setLignes(props.contacts)
+    setReference(recu)
+    setObjets([1, 2, 3, 4].map((n) => objetCommun(props.contacts, n)))
+  }, [recu]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const erreurs = useMemo(
     () => lignes.map((l) => (l.Nom || l.Email || l.Sujet1 ? !estEmailValide(l.Email ?? "") : false)),
@@ -130,7 +138,7 @@ export function EditeurContacts(props: {
   function annuler() {
     const ref: LigneContact[] = JSON.parse(reference)
     setLignes(ref)
-    setObjets([1, 2, 3, 4].map((n) => plusFrequent(ref.map((c) => c[`Sujet${n}`] ?? ""))))
+    setObjets([1, 2, 3, 4].map((n) => objetCommun(ref, n)))
   }
 
   const ligneAvecObjets = (): LigneContact => ({
@@ -157,14 +165,14 @@ export function EditeurContacts(props: {
     if (!texte.includes("\t") && !texte.includes("\n")) return // simple valeur : collage normal
     e.preventDefault()
     const blocs = texte.split("\n").map((l) => l.split("\t"))
-    const depart = colonnes.indexOf(col)
+    const depart = colonnesAffichees.indexOf(col)
     setLignes((ls) => {
       const r = [...ls]
       blocs.forEach((valeurs, k) => {
         while (r.length <= i + k) r.push(ligneAvecObjets())
         const ligne = { ...r[i + k] }
         valeurs.forEach((v, j) => {
-          const c = colonnes[depart + j]
+          const c = colonnesAffichees[depart + j]
           if (!c) return
           let val = v.trim()
           if (c === "Civilite") val = normaliserCivilite(val)
@@ -215,7 +223,7 @@ export function EditeurContacts(props: {
   // Objets en conflit (identiques ou début d'un objet précédent) : le bloc doit rester ouvert pour les corriger
   const objetsEnConflit = [2, 3, 4].some((n) => {
     const o = objets[n - 1].trim()
-    return o && [1, 2, 3].some((m) => m < n && objets[m - 1].trim().startsWith(o))
+    return o && [1, 2, 3].some((m) => m < n && objets[m - 1].trim() === o)
   })
   const blocObjetsOuvert = objetsOuverts || objetsEnConflit || !objets[0].trim()
 
@@ -246,6 +254,7 @@ export function EditeurContacts(props: {
           <CardDescription>
             L'objet saisi ici s'applique directement à tous les contacts. Les variables {"{{CIVILITE}}"}, {"{{PRENOM}}"},{" "}
             {"{{NOM}}"} et {"{{ENTREPRISE}}"} sont remplacées pour chaque contact. Un objet vide arrête la séquence à cette étape.
+            Pour donner un autre objet à un contact précis : onglet Textes des mails, avec son texte.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
@@ -257,12 +266,10 @@ export function EditeurContacts(props: {
           )}
           {[1, 2, 3, 4].map((n) => {
             const autres = personnalises(n)
-            // Le suivi reconnait une etape a l'objet du mail : un objet identique a celui d'une etape
-            // precedente (ou qui en est le debut) rendrait les deux mails indiscernables.
+            // Le suivi reconnait une etape a l'objet du mail (prefixe le plus long) : seul un objet IDENTIQUE a
+            // celui d'une etape precedente rend les deux mails indiscernables.
             const objet = objets[n - 1].trim()
-            const conflit = objet
-              ? [1, 2, 3, 4].find((m) => m < n && objets[m - 1].trim() && objets[m - 1].trim().startsWith(objet))
-              : undefined
+            const conflit = objet ? [1, 2, 3, 4].find((m) => m < n && objets[m - 1].trim() === objet) : undefined
             return (
               <div key={n} className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <span className="w-24 shrink-0 text-xs text-muted-foreground">Mail{n}</span>
@@ -275,14 +282,13 @@ export function EditeurContacts(props: {
                 />
                 {conflit && (
                   <span className="w-full pl-26 text-xs text-destructive">
-                    {objets[conflit - 1].trim() === objet ? "Identique à" : "Correspond au début de"} l'objet Mail{conflit} : l'outil
-                    ne pourrait pas distinguer les deux mails (le Mail{n} serait considéré comme déjà envoyé). Donne-lui un objet
-                    différent, par exemple en ajoutant « Re: » devant.
+                    Identique à l'objet Mail{conflit} : l'outil ne pourrait pas distinguer les deux mails, et ne préparerait
+                    pas ce Mail{n}. Donne-lui un objet différent, par exemple en ajoutant « Re: » devant.
                   </span>
                 )}
                 {autres > 0 && lignes.length > 0 && (
                   <span className="w-full pl-26 text-xs text-muted-foreground">
-                    {autres} contact(s) ont un autre objet pour Mail{n}.{" "}
+                    {autres} contact(s) ont leur propre objet pour Mail{n} (visible dans l'onglet Textes des mails).{" "}
                     <button className="underline underline-offset-2 hover:text-foreground" onClick={() => appliquerObjet(n)}>
                       Leur appliquer celui-ci
                     </button>
@@ -345,7 +351,7 @@ export function EditeurContacts(props: {
             <thead>
               <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
                 <th className="w-10 px-2 py-2 font-medium">#</th>
-                {colonnes.map((c) => (
+                {colonnesAffichees.map((c) => (
                   <th key={c} className={cn("px-1 py-2 font-medium", largeur[c] ?? "w-72")}>{libelleColonne[c] ?? c}</th>
                 ))}
                 <th className="w-10" />
@@ -354,7 +360,7 @@ export function EditeurContacts(props: {
             <tbody>
               {lignes.length === 0 && (
                 <tr>
-                  <td colSpan={colonnes.length + 2} className="py-10 pl-4 text-left text-muted-foreground">
+                  <td colSpan={colonnesAffichees.length + 2} className="py-10 pl-4 text-left text-muted-foreground">
                     Aucun contact. Clique sur « Ajouter en masse » pour coller une liste depuis Excel ou Outlook.
                   </td>
                 </tr>
@@ -362,7 +368,7 @@ export function EditeurContacts(props: {
               {lignes.map((l, i) => (
                 <tr key={i} className="border-b last:border-0 hover:bg-muted/30">
                   <td className="px-2 text-xs text-muted-foreground tabular-nums">{i + 1}</td>
-                  {colonnes.map((c) => {
+                  {colonnesAffichees.map((c) => {
                     const invalide = c === "Email" && (erreurs[i] || doublons.has((l.Email ?? "").trim().toLowerCase()))
                     const risque = risques.get(i)?.cols.has(c)
                     return (
@@ -415,9 +421,9 @@ export function EditeurContacts(props: {
         dépend de la position du contact.
       </p>
 
-      {/* Barre d'enregistrement : reste visible en bas de l'écran tant qu'il y a des modifications */}
+      {/* Barre d'enregistrement flottante, alignée sur la page : reste visible en bas de l'écran tant qu'il y a des modifications */}
       {modifie && (
-        <div className="sticky bottom-0 z-10 -mx-6 -mb-6 flex flex-wrap items-center gap-3 border-t bg-background/95 px-6 py-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)] backdrop-blur">
+        <div className="sticky bottom-4 z-10 flex flex-wrap items-center gap-3 rounded-xl border bg-background/95 px-4 py-3 shadow-lg backdrop-blur">
           <span className="flex items-center gap-2 text-sm font-medium">
             <span className="size-2 rounded-full bg-amber-500" /> Modifications non enregistrées
           </span>

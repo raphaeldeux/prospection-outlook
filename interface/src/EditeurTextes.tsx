@@ -23,25 +23,35 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { enregistrerTexte, type LigneContact, type TextePersonnalise } from "@/lib/api"
-import { resoudreVariables, texteVersHtml } from "@/lib/apercu"
+import { enregistrerObjet, enregistrerTexte, type LigneContact, type TextePersonnalise } from "@/lib/api"
+import { objetCommun, resoudreVariables, texteVersHtml } from "@/lib/apercu"
+import { nomAffiche } from "@/lib/statut"
 import { cn } from "@/lib/utils"
 
 const libelles = ["", "Mail1", "Mail2 · relance 1", "Mail3 · relance 2", "Mail4 · relance 3"]
 
-/** "" = texte commun à tous les contacts ; sinon adresse (minuscules) du contact dont on édite le texte personnalisé */
+/** "" = texte commun à tous les contacts ; sinon adresse (minuscules) du contact dont on édite le mail */
 type Cible = string
 const cle = (cible: Cible, etape: number) => `${cible}|${etape}`
 const normaliser = (email: string | undefined) => (email ?? "").trim().toLowerCase()
+/** Prénom + nom (prénom déduit de l'adresse s'il manque) ; adresse pour un contact absent de la liste */
 const nomContact = (c: LigneContact | undefined, email: string) =>
-  c ? [c.Prenom, c.Nom].filter(Boolean).join(" ") || c.Email : email
+  c ? nomAffiche({ Civilite: c.Civilite ?? "", Prenom: c.Prenom, Nom: c.Nom ?? "", Email: c.Email ?? "" }) || email : email
+const etapeDeCle = (c: string) => Number(c.slice(c.lastIndexOf("|") + 1))
+const emailDeCle = (c: string) => c.slice(0, c.lastIndexOf("|"))
 
 export function EditeurTextes(props: {
   campagne: string
   textes: { etape: number; contenu: string }[]
   personnalises: TextePersonnalise[]
   contacts: LigneContact[]
+  /** Étapes déjà envoyées, par adresse (minuscules) : changer leur objet empêcherait le suivi de retrouver le mail */
+  envois: Record<string, number[]>
+  /** Des modifications non enregistrées dans l'onglet Contacts : les objets ne sont pas modifiables ici en attendant */
+  contactsModifies: boolean
+  onVoirContacts: () => void
   etape: number
   setEtape: (n: number) => void
   onEnregistre: () => void
@@ -57,37 +67,62 @@ export function EditeurTextes(props: {
     return r
   })
   const [brouillons, setBrouillons] = useState<Record<string, string>>(enregistres)
+  // Objets propres à un contact en cours d'édition (la valeur enregistrée est dans contacts.csv, colonne SujetN)
+  const [objetsEdites, setObjetsEdites] = useState<Record<string, string>>({})
+  const [objetsEnregistres, setObjetsEnregistres] = useState<Record<string, string>>({})
   const [cible, setCible] = useState<Cible>("")
   const [sauvegarde, setSauvegarde] = useState(false)
   const [confirmerRetour, setConfirmerRetour] = useState(false)
   const [apercuContact, setApercuContact] = useState(0)
   const zone = useRef<HTMLTextAreaElement>(null)
 
+  const contactsValides = props.contacts.filter((c) => c.Nom || c.Email)
+  const parEmail = new Map(contactsValides.filter((c) => normaliser(c.Email)).map((c) => [normaliser(c.Email), c]))
+
   const k = cle(cible, etape)
-  const modifieCle = (c: string) => brouillons[c] !== enregistres[c]
-  const modifieEtape = (n: number) => Object.keys({ ...brouillons, ...enregistres }).some((c) => c.endsWith(`|${n}`) && modifieCle(c))
+  const objetEnregistre = (c: string) =>
+    objetsEnregistres[c] ?? parEmail.get(emailDeCle(c))?.[`Sujet${etapeDeCle(c)}`] ?? ""
+  const modifieObjet = (c: string) => objetsEdites[c] !== undefined && objetsEdites[c] !== objetEnregistre(c)
+  const modifieTexte = (c: string) => brouillons[c] !== enregistres[c]
+  const modifieCle = (c: string) => modifieTexte(c) || modifieObjet(c)
+  const toutesCles = () => Object.keys({ ...brouillons, ...enregistres, ...objetsEdites })
+  const modifieEtape = (n: number) => toutesCles().some((c) => etapeDeCle(c) === n && modifieCle(c))
   const unModifie = [1, 2, 3, 4].some(modifieEtape)
   useEffect(() => props.onModifie(unModifie), [unModifie]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Contacts (avec adresse) et adresses ayant un texte personnalisé sans être (ou plus être) dans les contacts
-  const contactsValides = props.contacts.filter((c) => c.Nom || c.Email)
-  const parEmail = new Map(contactsValides.filter((c) => normaliser(c.Email)).map((c) => [normaliser(c.Email), c]))
-  const persoEtape = (n: number) =>
-    [...new Set(Object.keys({ ...brouillons, ...enregistres }).filter((c) => c.endsWith(`|${n}`) && !c.startsWith("|")))]
-      .filter((c) => brouillons[c] !== undefined)
-      .map((c) => c.slice(0, c.lastIndexOf("|")))
-  const persoIci = persoEtape(etape)
+  // Objet commun de l'étape (le plus fréquent) et contacts qui ont leur propre texte et/ou leur propre objet
+  const objetDeLEtape = (n: number) => objetCommun(props.contacts, n)
+  const texteDifferent = (email: string, n: number) => brouillons[cle(email, n)] !== undefined
+  const objetDifferent = (email: string, n: number) =>
+    (objetsEdites[cle(email, n)] ?? objetEnregistre(cle(email, n))) !== objetDeLEtape(n)
+  const personnalisesEtape = (n: number) => {
+    const emails = new Set([
+      ...Object.keys(brouillons).filter((c) => !c.startsWith("|") && etapeDeCle(c) === n).map(emailDeCle),
+      ...[...parEmail.keys()].filter((e) => objetDifferent(e, n)),
+    ])
+    return [...emails]
+  }
+  const persoIci = personnalisesEtape(etape)
   const orphelins = persoIci.filter((e) => !parEmail.has(e))
 
   const commun = brouillons[cle("", etape)] ?? ""
-  const personnalise = cible !== "" && brouillons[k] !== undefined
+  const textePerso = cible !== "" && brouillons[k] !== undefined
   const texte = cible === "" ? commun : (brouillons[k] ?? commun)
   const setTexte = (v: string) => setBrouillons((b) => ({ ...b, [k]: v }))
 
-  // Aperçu : le contact choisi en haut quand on édite son texte, sinon celui de la liste "Pour"
   const contactCible = cible ? parEmail.get(cible) : undefined
+  const objetCommunIci = objetDeLEtape(etape)
+  const objetCible = cible ? (objetsEdites[k] ?? objetEnregistre(k)) : objetCommunIci
+  const setObjetCible = (v: string) => setObjetsEdites((o) => ({ ...o, [k]: v }))
+  const dejaEnvoye = !!cible && (props.envois[cible] ?? []).includes(etape)
+  const objetIdentique =
+    cible && objetCible.trim()
+      ? [1, 2, 3, 4].find((n) => n !== etape && (contactCible?.[`Sujet${n}`] ?? "").trim() === objetCible.trim())
+      : undefined
+
+  // Aperçu : le contact choisi en haut quand on édite son mail, sinon celui de la liste "Pour"
   const contact = cible ? contactCible : (contactsValides[apercuContact] ?? contactsValides[0])
-  const objet = resoudreVariables(contact?.[`Sujet${etape}`] ?? "", contact)
+  const objet = resoudreVariables(cible ? objetCible : (contact?.[`Sujet${etape}`] ?? ""), contact)
 
   /** Entoure la sélection (ou insère à la position du curseur) */
   function inserer(avant: string, apres = "", parDefaut = "") {
@@ -110,12 +145,21 @@ export function EditeurTextes(props: {
     requestAnimationFrame(() => el.focus())
   }
 
+  /** Enregistre l'objet (s'il a changé) puis le texte (s'il a changé) de la vue en cours */
   async function enregistrer() {
     setSauvegarde(true)
     try {
-      await enregistrerTexte(campagne, etape, texte, cible || undefined)
-      setEnregistres((e) => ({ ...e, [k]: texte }))
-      toast.success(cible ? `Texte ${libelles[etape]} de ${nomContact(contactCible, cible)} enregistré` : `Texte ${libelles[etape]} enregistré`)
+      if (cible && modifieObjet(k)) {
+        const valeur = objetCible.trim()
+        await enregistrerObjet(campagne, cible, etape, valeur)
+        setObjetsEnregistres((o) => ({ ...o, [k]: valeur }))
+        setObjetsEdites((o) => ({ ...o, [k]: valeur }))
+      }
+      if (modifieTexte(k)) {
+        await enregistrerTexte(campagne, etape, texte, cible || undefined)
+        setEnregistres((e) => ({ ...e, [k]: texte }))
+      }
+      toast.success(cible ? `${libelles[etape]} de ${nomContact(contactCible, cible)} enregistré` : `Texte ${libelles[etape]} enregistré`)
       props.onEnregistre()
     } catch (e) {
       toast.error((e as Error).message)
@@ -130,6 +174,11 @@ export function EditeurTextes(props: {
       const n = { ...b }
       if (enregistres[k] === undefined) delete n[k]
       else n[k] = enregistres[k]
+      return n
+    })
+    setObjetsEdites((o) => {
+      const n = { ...o }
+      delete n[k]
       return n
     })
   }
@@ -159,16 +208,32 @@ export function EditeurTextes(props: {
   const aCompleter = texte.includes("[A COMPLETER]")
   const nomCible = nomContact(contactCible, cible)
 
+  const barreBoutons = (
+    <div className="flex flex-wrap gap-2">
+      <Button onClick={enregistrer} disabled={!modifieCle(k) || sauvegarde}>
+        {sauvegarde ? <Loader2Icon className="animate-spin" /> : <SaveIcon />} Enregistrer
+      </Button>
+      <Button variant="ghost" disabled={!modifieCle(k)} onClick={annuler}>
+        <Undo2Icon /> Annuler les modifications
+      </Button>
+      {textePerso && enregistres[k] !== undefined && (
+        <Button variant="ghost" className="ml-auto" onClick={() => setConfirmerRetour(true)}>
+          <UsersIcon /> Revenir au texte commun
+        </Button>
+      )}
+    </div>
+  )
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         {[1, 2, 3, 4].map((n) => {
-          const nbPerso = persoEtape(n).length
+          const nbPerso = personnalisesEtape(n).length
           return (
             <Button key={n} size="sm" variant={etape === n ? "secondary" : "ghost"} onClick={() => setEtape(n)}>
               {libelles[n]}
               {nbPerso > 0 && (
-                <span className="text-xs text-muted-foreground" title={`${nbPerso} contact(s) avec un texte personnalisé`}>
+                <span className="text-xs text-muted-foreground" title={`${nbPerso} contact(s) avec leur propre texte ou objet`}>
                   · {nbPerso} perso
                 </span>
               )}
@@ -182,18 +247,18 @@ export function EditeurTextes(props: {
         <Card>
           <CardHeader>
             <CardTitle className="flex flex-wrap items-center gap-2 text-sm">
-              <span>Texte de {libelles[etape]} pour</span>
+              <span>{libelles[etape]} pour</span>
               <select
                 className="h-7 max-w-full rounded-md border bg-background px-1.5 text-xs font-normal text-foreground"
                 value={cible}
                 onChange={(e) => setCible(e.target.value)}
-                aria-label="Destinataires de ce texte"
+                aria-label="Destinataires de ce mail"
               >
                 <option value="">tous les contacts (texte commun)</option>
                 {[...parEmail.entries()].map(([email, c]) => (
                   <option key={email} value={email}>
                     {nomContact(c, email)}
-                    {persoIci.includes(email) ? " — texte personnalisé" : ""}
+                    {persoIci.includes(email) ? " — personnalisé" : ""}
                   </option>
                 ))}
                 {orphelins.map((email) => (
@@ -205,21 +270,72 @@ export function EditeurTextes(props: {
             <CardDescription>
               {cible === ""
                 ? "Envoyé à tous les contacts, sauf ceux qui ont leur propre texte pour cette étape."
-                : personnalise
-                  ? `Ce texte remplace le texte commun pour ${nomCible} uniquement.`
-                  : `${nomCible} reçoit pour l'instant le texte commun.`}{" "}
+                : `Objet et texte propres à ${nomCible} : ils remplacent ceux de la campagne pour lui seul.`}{" "}
               Ta signature Outlook est ajoutée automatiquement.
               {etape > 1 && " La relance répond au mail précédent, qui est cité en dessous."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {cible !== "" && !personnalise ? (
+            {/* Objet du mail */}
+            {cible === "" ? (
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+                <span className="text-muted-foreground">Objet :</span>
+                {objetCommunIci ? <span className="font-medium">{objetCommunIci}</span> : (
+                  <span className="text-amber-700 dark:text-amber-300">aucun (pas de {libelles[etape]})</span>
+                )}
+                <button className="ml-auto text-xs underline underline-offset-2 hover:text-foreground" onClick={props.onVoirContacts}>
+                  Modifier l'objet de tous (onglet Contacts)
+                </button>
+              </div>
+            ) : contactCible ? (
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium" htmlFor="objet-contact">Objet pour {nomCible}</label>
+                <Input
+                  id="objet-contact"
+                  value={objetCible}
+                  onChange={(e) => setObjetCible(e.target.value)}
+                  disabled={props.contactsModifies}
+                  aria-invalid={objetIdentique ? true : undefined}
+                  placeholder="Vide : pas de mail à cette étape pour ce contact"
+                />
+                {props.contactsModifies ? (
+                  <p className="text-xs text-amber-700 dark:text-amber-300">
+                    Enregistre ou annule d'abord les modifications de l'onglet Contacts pour changer l'objet ici.
+                  </p>
+                ) : (
+                  <>
+                    {objetCible !== objetCommunIci && (
+                      <p className="text-xs text-muted-foreground">
+                        Objet commun : « {objetCommunIci || "aucun"} ».{" "}
+                        <button className="underline underline-offset-2 hover:text-foreground" onClick={() => setObjetCible(objetCommunIci)}>
+                          Reprendre l'objet commun
+                        </button>
+                      </p>
+                    )}
+                    {objetIdentique && (
+                      <p className="text-xs text-destructive">
+                        Identique à son objet Mail{objetIdentique} : l'outil ne pourrait pas distinguer les deux mails.
+                      </p>
+                    )}
+                    {dejaEnvoye && modifieObjet(k) && (
+                      <p className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300">
+                        <TriangleAlertIcon className="mt-0.5 size-3.5 shrink-0" />
+                        {libelles[etape]} est déjà parti pour ce contact : avec un autre objet, le suivi ne retrouvera plus ce mail.
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+            ) : null}
+
+            {/* Corps du mail */}
+            {cible !== "" && !textePerso ? (
               <div className="flex flex-col items-start gap-3 rounded-lg border border-dashed p-4 text-sm">
                 <p className="text-muted-foreground">
-                  Écris un texte entièrement différent pour {nomCible} : il partira à sa place pour {libelles[etape]}. Le texte
-                  commun sert de point de départ.
+                  {nomCible} reçoit le texte commun. Tu peux lui écrire un texte entièrement différent pour {libelles[etape]} : le
+                  texte commun sert de point de départ.
                 </p>
-                <Button size="sm" onClick={() => setTexte(commun)}>
+                <Button size="sm" variant="outline" onClick={() => setTexte(commun)}>
                   <PenLineIcon /> Écrire un texte pour {nomCible}
                 </Button>
               </div>
@@ -249,32 +365,24 @@ export function EditeurTextes(props: {
                     Retire le marqueur [A COMPLETER] une fois le texte rédigé : tant qu'il est présent, ce mail ne peut pas être créé.
                   </p>
                 )}
-                <div className="flex flex-wrap gap-2">
-                  <Button onClick={enregistrer} disabled={!modifieCle(k) || sauvegarde}>
-                    {sauvegarde ? <Loader2Icon className="animate-spin" /> : <SaveIcon />} Enregistrer
-                  </Button>
-                  <Button variant="ghost" disabled={!modifieCle(k)} onClick={annuler}>
-                    <Undo2Icon /> Annuler les modifications
-                  </Button>
-                  {personnalise && enregistres[k] !== undefined && (
-                    <Button variant="ghost" className="ml-auto" onClick={() => setConfirmerRetour(true)}>
-                      <UsersIcon /> Revenir au texte commun
-                    </Button>
-                  )}
-                </div>
               </>
             )}
+            {barreBoutons}
 
             {cible === "" && persoIci.length > 0 && (
               <div className="space-y-1.5 border-t pt-3 text-xs text-muted-foreground">
-                <p>Ces contacts ont leur propre texte pour {libelles[etape]} (le texte commun ne leur est pas envoyé) :</p>
+                <p>Ces contacts ont leur propre objet ou texte pour {libelles[etape]} :</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {persoIci.map((email) => (
-                    <Button key={email} size="xs" variant="outline" onClick={() => setCible(email)}>
-                      <PenLineIcon /> {nomContact(parEmail.get(email), email)}
-                      {modifieCle(cle(email, etape)) && <span className="size-1.5 rounded-full bg-amber-500" />}
-                    </Button>
-                  ))}
+                  {persoIci.map((email) => {
+                    const quoi = [objetDifferent(email, etape) && "objet", texteDifferent(email, etape) && "texte"].filter(Boolean).join(" + ")
+                    return (
+                      <Button key={email} size="xs" variant="outline" onClick={() => setCible(email)}>
+                        <PenLineIcon /> {nomContact(parEmail.get(email), email)}
+                        <span className="text-muted-foreground">({quoi})</span>
+                        {modifieCle(cle(email, etape)) && <span className="size-1.5 rounded-full bg-amber-500" />}
+                      </Button>
+                    )
+                  })}
                 </div>
               </div>
             )}
@@ -295,13 +403,13 @@ export function EditeurTextes(props: {
                   onChange={(e) => setApercuContact(Number(e.target.value))}
                 >
                   {contactsValides.map((c, i) => (
-                    <option key={i} value={i}>{[c.Civilite, c.Nom].filter(Boolean).join(" ") || c.Email}</option>
+                    <option key={i} value={i}>{nomContact(c, c.Email ?? "")}</option>
                   ))}
                 </select>
               ) : (
                 <span>un contact fictif (aucun contact saisi)</span>
               )}
-              {!cible && contact && persoIci.includes(normaliser(contact.Email)) && (
+              {!cible && contact && texteDifferent(normaliser(contact.Email), etape) && (
                 <span className="text-amber-700 dark:text-amber-300">
                   (ce contact a son propre texte : choisis-le en haut à gauche pour le voir)
                 </span>
@@ -312,7 +420,7 @@ export function EditeurTextes(props: {
             <div className="rounded-lg border bg-muted/40 px-3 py-2 text-sm">
               <span className="text-muted-foreground">Objet : </span>
               {objet ? <span className="font-medium">{objet}</span> : (
-                <span className="text-amber-700 dark:text-amber-300">colonne Sujet{etape} vide pour ce contact (pas de mail à cette étape)</span>
+                <span className="text-amber-700 dark:text-amber-300">vide pour ce contact (pas de mail à cette étape)</span>
               )}
             </div>
             <div
@@ -331,6 +439,7 @@ export function EditeurTextes(props: {
             <AlertDialogTitle>Revenir au texte commun pour {nomCible} ?</AlertDialogTitle>
             <AlertDialogDescription>
               Son texte personnalisé de {libelles[etape]} sera supprimé, et il recevra le texte commun comme les autres contacts.
+              Son objet ne change pas.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

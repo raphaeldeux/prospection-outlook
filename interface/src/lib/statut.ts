@@ -1,11 +1,16 @@
 // Libellés lisibles pour un commercial, calculés à partir des données du suivi
 import { etapeSuivante, type Contact } from "@/lib/api"
+import { deduireDepuisEmail } from "@/lib/import"
 import { libelleIssue } from "@/lib/issues"
 
-/** "Claire Martin" ; à défaut "Madame Martin" ; à défaut l'adresse */
-export function nomAffiche(c: Contact) {
-  if (c.Prenom || c.Nom) return [c.Prenom || c.Civilite, c.Nom].filter(Boolean).join(" ")
-  return c.Email
+/**
+ * "Claire Martin". Prénom vide : déduit de l'adresse (claire.martin@… → Claire), sinon la civilité ("Madame Martin").
+ * Ni prénom ni nom : l'adresse.
+ */
+export function nomAffiche(c: Pick<Contact, "Civilite" | "Nom" | "Email"> & { Prenom?: string }) {
+  if (!c.Prenom && !c.Nom) return c.Email ?? ""
+  const prenom = c.Prenom || deduireDepuisEmail(c.Email ?? "").Prenom || c.Civilite
+  return [prenom, c.Nom].filter(Boolean).join(" ")
 }
 
 const jjmm = (d?: string) => (d ? d.slice(0, 5) : "")

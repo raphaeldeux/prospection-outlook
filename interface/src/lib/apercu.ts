@@ -43,3 +43,13 @@ export function texteVersHtml(texte: string) {
 }
 
 export const estEmailValide = (e: string) => /^[^\s@;]+@[^\s@;]+\.[a-z]{2,}$/i.test(e.trim())
+
+/** Objet commun d'une étape = l'objet le plus fréquent parmi les contacts (les autres ont un objet personnalisé) */
+export function objetCommun(contacts: LigneContact[], etape: number) {
+  const n = new Map<string, number>()
+  contacts.map((c) => c[`Sujet${etape}`] ?? "").filter(Boolean).forEach((v) => n.set(v, (n.get(v) ?? 0) + 1))
+  return [...n.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? ""
+}
+
+/** Colonnes d'objet (Sujet1..Sujet4) : modifiées dans le bloc « Objets des mails » et l'onglet Textes, pas dans le tableau */
+export const estColonneObjet = (colonne: string) => /^Sujet[1-4]$/.test(colonne)

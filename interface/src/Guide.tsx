@@ -20,7 +20,7 @@ const plan = [
       { id: "objets", titre: "Les objets des mails" },
       { id: "contacts", titre: "Ajouter des contacts" },
       { id: "textes", titre: "Rédiger les mails" },
-      { id: "personnalises", titre: "Un texte différent pour un contact" },
+      { id: "personnalises", titre: "Un objet ou un texte différent pour un contact" },
       { id: "regles", titre: "Les règles à respecter" },
     ],
   },
@@ -227,7 +227,8 @@ export function Guide() {
           <Section id="objets" titre="Les objets des mails">
             <p>
               Dans l'onglet Contacts, le bloc <strong>Objets des mails</strong> définit l'objet de chaque étape. Il s'applique
-              directement à tous les contacts.
+              directement à tous les contacts. Pour donner un autre objet à un contact précis, va dans l'onglet{" "}
+              <strong>Textes des mails</strong> (voir « Un objet ou un texte différent pour un contact »).
             </p>
             <p>
               Les variables <Code>{"{{CIVILITE}}"}</Code>, <Code>{"{{PRENOM}}"}</Code>, <Code>{"{{NOM}}"}</Code> et{" "}
@@ -273,7 +274,6 @@ export function Guide() {
                   <tr><td className="text-foreground">Entreprise</td><td>Variable {"{{ENTREPRISE}}"}</td></tr>
                   <tr><td className="text-foreground">Téléphone</td><td>Facultatif, pour mémoire</td></tr>
                   <tr><td className="text-foreground">E-mail</td><td>Obligatoire ; en rouge si invalide ou en double</td></tr>
-                  <tr><td className="text-foreground">Objet Mail1 … Mail4</td><td>Rempli par le bloc « Objets des mails »</td></tr>
                 </tbody>
               </table>
             </div>
@@ -307,28 +307,36 @@ export function Guide() {
             </ul>
           </Section>
 
-          <Section id="personnalises" titre="Un texte différent pour un contact">
+          <Section id="personnalises" titre="Un objet ou un texte différent pour un contact">
             <p>
-              Pour n'importe quelle étape (Mail1 à Mail4), un contact peut recevoir un <strong>texte entièrement différent</strong>{" "}
-              du texte commun.
+              Pour n'importe quelle étape (Mail1 à Mail4), un contact peut recevoir un <strong>objet</strong> et/ou un{" "}
+              <strong>texte entièrement différents</strong> de ceux de la campagne.
             </p>
             <ol className="list-decimal space-y-1.5 pl-5">
               <li>Onglet <strong>Textes des mails</strong>, choisis l'étape.</li>
               <li>
-                Dans la liste <strong>« Texte de … pour »</strong>, remplace « tous les contacts » par le contact voulu.
+                Dans la liste <strong>« Mail1 pour »</strong>, remplace « tous les contacts » par le contact voulu.
               </li>
               <li>
-                Clique sur <strong>Écrire un texte pour …</strong> : le texte commun est recopié comme point de départ. Modifie-le
-                librement (les variables fonctionnent toujours), puis <strong>Enregistrer</strong>.
+                Modifie son <strong>objet</strong> dans le champ « Objet pour … » (« Reprendre l'objet commun » annule).
               </li>
+              <li>
+                Pour le texte, clique sur <strong>Écrire un texte pour …</strong> : le texte commun est recopié comme point de
+                départ. Modifie-le librement (les variables fonctionnent toujours).
+              </li>
+              <li><strong>Enregistrer</strong> enregistre l'objet et le texte.</li>
             </ol>
             <ul className="list-disc space-y-1 pl-5">
-              <li>Ce contact reçoit son texte ; tous les autres gardent le texte commun. L'objet du mail ne change pas.</li>
+              <li>Ce contact reçoit son objet et son texte ; tous les autres gardent ceux de la campagne.</li>
               <li>
                 Les contacts concernés sont listés sous le texte commun, marqués « perso » dans les onglets d'étape, et signalés
                 dans le suivi (« Texte perso : Mail1, Mail3 »).
               </li>
-              <li><strong>Revenir au texte commun</strong> supprime son texte personnalisé.</li>
+              <li><strong>Revenir au texte commun</strong> supprime son texte personnalisé (son objet ne change pas).</li>
+              <li>
+                Ne change pas l'objet d'une étape déjà envoyée à ce contact : le suivi ne retrouverait plus le mail (un message
+                orange le rappelle).
+              </li>
             </ul>
             <Attention>
               Le texte personnalisé est rattaché à l'<strong>adresse e-mail</strong> du contact : si tu changes son adresse, il

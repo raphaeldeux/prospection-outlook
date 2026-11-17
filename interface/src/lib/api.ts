@@ -186,3 +186,10 @@ export async function chargerVersion(locale = false): Promise<InfosVersion> {
 export async function lancerMiseAJour() {
   return lire<{ ok: boolean }>(await fetch("/api/mettre-a-jour", { method: "POST", headers: entetes }))
 }
+
+/** Objet d'une étape pour un seul contact (colonne SujetN de sa ligne dans contacts.csv) */
+export async function enregistrerObjet(campagne: string, email: string, etape: number, objet: string) {
+  return lire<{ ok: boolean }>(
+    await fetch("/api/objet", { method: "PUT", headers: entetes, body: JSON.stringify({ campagne, email, etape, objet }) }),
+  )
+}

@@ -7,6 +7,7 @@
 #   POST /api/fichiers  -> contenu de contacts.csv et des textes Mail1..4 d'une campagne
 #   PUT  /api/contacts  -> enregistre contacts.csv (UTF-8 avec BOM, separateur ;)
 #   PUT  /api/texte     -> enregistre Textes\MailN.txt, ou le texte personnalise d'un contact (champ email)
+#   PUT  /api/objet     -> objet d'une etape pour un contact (colonne SujetN de sa ligne dans contacts.csv)
 #   PUT  /api/parametres -> enregistre les reglages de la campagne (delai avant relance)
 #   POST /api/ouvrir    -> ouvre le dossier de la campagne dans l'Explorateur
 #   POST /api/outlook-brouillons -> affiche le dossier Brouillons dans Outlook
@@ -306,6 +307,35 @@ try {
                     Write-FichierCampagne -Chemin (Join-Path $dossier "contacts.csv") -Contenu (($lignes -join "`r`n") + "`r`n")
                     Write-Host "$(Get-Date -Format HH:mm:ss) Contacts enregistres - $($corps.campagne) ($($lignes.Count - 1) ligne(s))"
                     Send-Json $ctx 200 @{ ok = $true; nb = $lignes.Count - 1 }
+                    continue
+                }
+
+                if ($chemin -eq "/api/objet" -and $req.HttpMethod -eq "PUT") {
+                    # Objet d'une etape pour UN contact (colonne SujetN de sa ligne dans contacts.csv), modifie depuis
+                    # l'onglet Textes : seule cette case change, le reste du fichier est reecrit a l'identique.
+                    $corps = Read-Corps $req
+                    $dossier = Get-DossierCampagne $corps.campagne
+                    $etape = [int]$corps.etape
+                    $email = ([string]$corps.email).Trim().ToLower()
+                    if (-not $dossier -or $etape -notin 1..4 -or -not $email) { Send-Json $ctx 400 @{ erreur = "Campagne, etape ou contact invalide." }; continue }
+                    $csv = Join-Path $dossier "contacts.csv"
+                    $entete = @((Get-Content $csv -Encoding UTF8 -TotalCount 1) -split ';' | ForEach-Object { $_.Trim('"') } | Where-Object { $_ })
+                    $colonnes = @($entete) + @($colonnesStandard | Where-Object { $_ -notin $entete })
+                    $objet = ([string]$corps.objet) -replace "[\r\n]+", " "
+                    $nb = 0
+                    $lignes = New-Object System.Collections.Generic.List[string]
+                    $lignes.Add(($colonnes | ForEach-Object { ConvertTo-ChampCsv $_ }) -join ';')
+                    foreach ($contact in @(Import-Csv -Path $csv -Delimiter ';' -Encoding UTF8)) {
+                        if (([string]$contact.Email).Trim().ToLower() -eq $email) {
+                            $contact | Add-Member -NotePropertyName "Sujet$etape" -NotePropertyValue $objet.Trim() -Force
+                            $nb++
+                        }
+                        $lignes.Add((($colonnes | ForEach-Object { ConvertTo-ChampCsv ([string]$contact.$_) }) -join ';'))
+                    }
+                    if ($nb -eq 0) { Send-Json $ctx 404 @{ erreur = "Contact introuvable dans contacts.csv (adresse modifiee ?)." }; continue }
+                    Write-FichierCampagne -Chemin $csv -Contenu (($lignes -join "`r`n") + "`r`n")
+                    Write-Host "$(Get-Date -Format HH:mm:ss) Objet Mail$etape modifie pour $email - $($corps.campagne)"
+                    Send-Json $ctx 200 @{ ok = $true }
                     continue
                 }
 
