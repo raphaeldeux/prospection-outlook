@@ -157,9 +157,7 @@ function Test-ExisteDeja {
     foreach ($item in $folderItems) {
         if ($item.Class -ne 43) { continue }
         if (-not $item.Subject.StartsWith($subjectPropre, [StringComparison]::Ordinal)) { continue }
-        foreach ($recip in $item.Recipients) {
-            if (($recip.Address -and $recip.Address -ieq $email) -or ($recip.Name -and $recip.Name -ieq $email)) { return $true }
-        }
+        if (Test-EnvoyeA -Item $item -Email $email) { return $true }   # adresse SMTP, meme en interne
     }
     return $false
 }

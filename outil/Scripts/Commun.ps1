@@ -49,17 +49,81 @@ function Get-ItemsParExpediteur {
     param($Folder, [string[]]$Adresses, [datetime]$Depuis)
     $resultat = New-Object System.Collections.Generic.List[object]
     $uniques = @($Adresses | Where-Object { $_ -and $_.Contains("@") } | ForEach-Object { $_.Trim().ToLower() } | Select-Object -Unique)
-    $propriete = "http://schemas.microsoft.com/mapi/proptag/0x0C1F001F"   # PR_SENDER_EMAIL_ADDRESS
-    for ($i = 0; $i -lt $uniques.Count; $i += 30) {
-        $paquet = $uniques[$i..([Math]::Min($i + 29, $uniques.Count - 1))]
-        $conditions = foreach ($a in $paquet) { "`"$propriete`" LIKE '" + ($a -replace "'", "''") + "%'" }
+    # Deux proprietes : l'adresse "brute" (SMTP pour un externe) et l'adresse SMTP de l'expediteur, seule
+    # utilisable pour un expediteur interne a l'organisation (la brute est alors un identifiant /o=Exchange...).
+    $proprietes = @("http://schemas.microsoft.com/mapi/proptag/0x0C1F001F",   # PR_SENDER_EMAIL_ADDRESS
+                    "http://schemas.microsoft.com/mapi/proptag/0x5D01001F")   # PR_SENDER_SMTP_ADDRESS
+    for ($i = 0; $i -lt $uniques.Count; $i += 20) {
+        $paquet = $uniques[$i..([Math]::Min($i + 19, $uniques.Count - 1))]
+        $conditions = foreach ($a in $paquet) { foreach ($p in $proprietes) { "`"$p`" LIKE '" + ($a -replace "'", "''") + "%'" } }
         foreach ($item in $Folder.Items.Restrict("@SQL=(" + ($conditions -join " OR ") + ")")) {
             if ($item.Class -ne 43) { continue }
             if ($item.ReceivedTime -lt $Depuis) { continue }
-            $exp = $null
-            try { $exp = ([string]$item.SenderEmailAddress).ToLower() } catch {}
+            $exp = Get-AdresseExpediteur $item
             if ($exp -and $uniques -contains $exp) { $resultat.Add($item) }
         }
     }
     return , $resultat
+}
+
+# ----- Adresses e-mail des destinataires et expediteurs -----
+# Pour une personne de la meme organisation (ex. un collegue, ou soi-meme), Outlook ne donne pas son
+# adresse SMTP dans Recipient.Address / SenderEmailAddress mais un identifiant Exchange
+# ("/o=ExchangeLabs/.../cn=Recipients/..."). Il faut alors lire la propriete SMTP dediee.
+
+function Get-AdresseSmtp {
+    # Adresse SMTP (en minuscules) d'un destinataire Outlook
+    param($Recipient)
+    try {
+        $a = [string]$Recipient.PropertyAccessor.GetProperty("http://schemas.microsoft.com/mapi/proptag/0x39FE001F")  # PR_SMTP_ADDRESS
+        if ($a -and $a.Contains("@")) { return $a.Trim().ToLower() }
+    } catch {}
+    try {
+        if ($Recipient.AddressEntry.Type -eq "EX") {
+            $u = $Recipient.AddressEntry.GetExchangeUser()
+            if ($u -and $u.PrimarySmtpAddress) { return ([string]$u.PrimarySmtpAddress).Trim().ToLower() }
+        }
+    } catch {}
+    return ([string]$Recipient.Address).Trim().ToLower()
+}
+
+function Get-AdressesDestinataires {
+    # Toutes les formes connues des destinataires d'un mail (adresse SMTP, adresse brute, nom affiche)
+    param($Item)
+    $liste = foreach ($r in $Item.Recipients) { Get-AdresseSmtp $r; ([string]$r.Address).ToLower(); ([string]$r.Name).ToLower() }
+    return @($liste | Where-Object { $_ } | Select-Object -Unique)
+}
+
+function Test-EnvoyeA {
+    # Vrai si le mail a ete envoye a cette adresse (comparaison insensible a la casse)
+    param($Item, [string]$Email)
+    if (-not $Email) { return $false }
+    return (Get-AdressesDestinataires $Item) -contains $Email.Trim().ToLower()
+}
+
+function Get-MesAdresses {
+    # Adresses SMTP (minuscules) des comptes configures dans Outlook : celles de l'utilisateur lui-meme
+    param($Namespace)
+    $liste = @()
+    try { foreach ($c in $Namespace.Accounts) { $liste += ([string]$c.SmtpAddress).ToLower() } } catch {}
+    try { $u = $Namespace.CurrentUser.AddressEntry.GetExchangeUser(); if ($u) { $liste += ([string]$u.PrimarySmtpAddress).ToLower() } } catch {}
+    return @($liste | Where-Object { $_ -and $_.Contains("@") } | Select-Object -Unique)
+}
+
+function Get-AdresseExpediteur {
+    # Adresse SMTP (en minuscules) de l'expediteur d'un mail recu
+    param($Item)
+    $brute = $null
+    try { $brute = [string]$Item.SenderEmailAddress } catch {}
+    if ($brute -and $brute.Contains("@")) { return $brute.Trim().ToLower() }
+    try {
+        $a = [string]$Item.PropertyAccessor.GetProperty("http://schemas.microsoft.com/mapi/proptag/0x5D01001F")  # PR_SENDER_SMTP_ADDRESS
+        if ($a -and $a.Contains("@")) { return $a.Trim().ToLower() }
+    } catch {}
+    try {
+        $u = $Item.Sender.GetExchangeUser()
+        if ($u -and $u.PrimarySmtpAddress) { return ([string]$u.PrimarySmtpAddress).Trim().ToLower() }
+    } catch {}
+    if ($brute) { return $brute.Trim().ToLower() }
+    return $null
 }

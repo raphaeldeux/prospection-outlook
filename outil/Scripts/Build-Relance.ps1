@@ -105,9 +105,7 @@ function Test-ExisteDeja {
     foreach ($item in $folderItems) {
         if ($item.Class -ne 43) { continue }
         if (-not $item.Subject.StartsWith($subjectPropre, [StringComparison]::Ordinal)) { continue }
-        foreach ($recip in $item.Recipients) {
-            if (($recip.Address -and $recip.Address -ieq $email) -or ($recip.Name -and $recip.Name -ieq $email)) { return $true }
-        }
+        if (Test-EnvoyeA -Item $item -Email $email) { return $true }   # adresse SMTP, meme en interne
     }
     return $false
 }
@@ -154,6 +152,7 @@ $inboxItems = @(Get-ItemsParExpediteur -Folder $ns.GetDefaultFolder(6) -Adresses
     Sort-Object -Property ReceivedTime -Descending)   # olFolderInbox
 
 $seuilDate = (Get-Date).AddDays(-$MinJours)
+$mesAdresses = Get-MesAdresses -Namespace $ns
 
 for ($i = 0; $i -lt $contacts.Count; $i++) {
     $contact = $contacts[$i]
@@ -193,11 +192,7 @@ for ($i = 0; $i -lt $contacts.Count; $i++) {
         $matchSujet = $false
         foreach ($sp in $sujetsPrecedentsPropres) { if ($item.Subject.StartsWith($sp, [StringComparison]::Ordinal)) { $matchSujet = $true; break } }
         if (-not $matchSujet) { continue }
-        $toMatch = $false
-        foreach ($recip in $item.Recipients) {
-            if (($recip.Address -and $recip.Address -ieq $contact.Email) -or ($recip.Name -and $recip.Name -ieq $contact.Email)) { $toMatch = $true; break }
-        }
-        if (-not $toMatch) { continue }
+        if (-not (Test-EnvoyeA -Item $item -Email $contact.Email)) { continue }
         $dernierEnvoye = $item
         break
     }
@@ -217,9 +212,10 @@ for ($i = 0; $i -lt $contacts.Count; $i++) {
     foreach ($item in $inboxItems) {
         if ($item.Class -ne 43) { continue }
         if ($item.ReceivedTime -le $dernierEnvoye.SentOn) { continue }
-        $senderAddr = $null
-        try { $senderAddr = $item.SenderEmailAddress } catch {}
-        if ($senderAddr -and $senderAddr -ieq $contact.Email) { $reponseManuelle = $item; break }
+        # contact = soi-meme (test) : les mails "recus" sont les copies de nos envois, pas des reponses
+        if ($mesAdresses -contains $contact.Email.Trim().ToLower()) { break }
+        $senderAddr = Get-AdresseExpediteur $item
+        if ($senderAddr -and $senderAddr -ieq $contact.Email.Trim()) { $reponseManuelle = $item; break }
     }
 
     if ($reponseManuelle) {

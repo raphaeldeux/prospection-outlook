@@ -80,10 +80,11 @@ function Get-IndexParAdresse {
         # les brouillons n'ont pas de date d'envoi (annee 4501) : on ne les filtre pas sur la date
         if ($date -and $date.Year -lt 4000 -and $date -lt $Limite) { if ($trie) { break } else { continue } }
         $adresses = @()
+        # adresses SMTP, y compris pour les personnes de la meme organisation (cf. Commun.ps1)
         if ($ParExpediteur) {
-            try { $adresses = @($item.SenderEmailAddress) } catch {}
+            $adresses = @(Get-AdresseExpediteur $item)
         } else {
-            foreach ($recip in $item.Recipients) { $adresses += $recip.Address; $adresses += $recip.Name }
+            $adresses = Get-AdressesDestinataires $item
         }
         $entree = [pscustomobject]@{ Sujet = [string]$item.Subject; Date = $date }
         foreach ($a in ($adresses | Where-Object { $_ } | ForEach-Object { $_.ToLower() } | Select-Object -Unique)) {
@@ -138,6 +139,7 @@ $recus = if ($adresses) { Get-IndexParAdresse -Folder $ns.GetDefaultFolder(6) -C
 $aujourdhui = (Get-Date).Date
 $resultats = New-Object System.Collections.Generic.List[object]
 
+$mesAdresses = Get-MesAdresses -Namespace $ns
 $delais = @{}
 foreach ($dossier in $dossiers) {
     $delai = if ($MinJours -ge 0) { $MinJours } else { Get-DelaiRelance $dossier.FullName }
@@ -169,10 +171,12 @@ foreach ($dossier in $dossiers) {
         $derniere = 0
         for ($n = 1; $n -le 4; $n++) { if ($dates[$n]) { $derniere = $n } }
 
-        # reponse = mail recu de ce contact apres le 1er envoi de la campagne
+        # reponse = mail recu de ce contact apres le 1er envoi de la campagne. Si le contact est l'utilisateur
+        # lui-meme (test envoye a sa propre adresse), les mails "recus" sont les copies de ses envois : pas
+        # de detection de reponse dans ce cas.
         $reponse = $null
         $premierEnvoi = ($dates.Values | Sort-Object | Select-Object -First 1)
-        if ($premierEnvoi -and $recus.ContainsKey($email)) {
+        if ($premierEnvoi -and $recus.ContainsKey($email) -and $mesAdresses -notcontains $email) {
             $reponse = $recus[$email] | Where-Object { $_.Date -gt $premierEnvoi } |
                 Sort-Object Date | Select-Object -First 1
         }
