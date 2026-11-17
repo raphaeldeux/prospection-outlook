@@ -8,7 +8,7 @@ import {
   SaveIcon,
   TriangleAlertIcon,
   Undo2Icon,
-  UsersIcon,
+  Trash2Icon,
 } from "lucide-react"
 import { toast } from "sonner"
 import {
@@ -26,7 +26,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { enregistrerObjet, enregistrerTexte, type LigneContact, type TextePersonnalise } from "@/lib/api"
-import { objetCommun, resoudreVariables, texteVersHtml } from "@/lib/apercu"
+import { objetDeCampagne, resoudreVariables, texteVersHtml } from "@/lib/apercu"
 import { nomAffiche } from "@/lib/statut"
 import { cn } from "@/lib/utils"
 
@@ -47,11 +47,12 @@ export function EditeurTextes(props: {
   textes: { etape: number; contenu: string }[]
   personnalises: TextePersonnalise[]
   contacts: LigneContact[]
+  /** Objets communs mémorisés pour la campagne (parametres.json) */
+  objets?: (string | null)[] | null
   /** Étapes déjà envoyées, par adresse (minuscules) : changer leur objet empêcherait le suivi de retrouver le mail */
   envois: Record<string, number[]>
   /** Des modifications non enregistrées dans l'onglet Contacts : les objets ne sont pas modifiables ici en attendant */
   contactsModifies: boolean
-  onVoirContacts: () => void
   etape: number
   setEtape: (n: number) => void
   onEnregistre: () => void
@@ -79,9 +80,16 @@ export function EditeurTextes(props: {
   const contactsValides = props.contacts.filter((c) => c.Nom || c.Email)
   const parEmail = new Map(contactsValides.filter((c) => normaliser(c.Email)).map((c) => [normaliser(c.Email), c]))
 
+  // Objets enregistrés connus localement depuis le dernier chargement : repartent des contacts reçus quand ils changent
+  const recus = JSON.stringify(props.contacts)
+  useEffect(() => setObjetsEnregistres({}), [recus])
+
   const k = cle(cible, etape)
+  const objetDeLEtape = (n: number) => objetDeCampagne(props.objets, props.contacts, n)
+  /** Objet enregistré : celui du contact (SujetN de sa ligne), ou l'objet commun pour la clé "" */
   const objetEnregistre = (c: string) =>
-    objetsEnregistres[c] ?? parEmail.get(emailDeCle(c))?.[`Sujet${etapeDeCle(c)}`] ?? ""
+    objetsEnregistres[c] ??
+    (emailDeCle(c) === "" ? objetDeLEtape(etapeDeCle(c)) : (parEmail.get(emailDeCle(c))?.[`Sujet${etapeDeCle(c)}`] ?? ""))
   const modifieObjet = (c: string) => objetsEdites[c] !== undefined && objetsEdites[c] !== objetEnregistre(c)
   const modifieTexte = (c: string) => brouillons[c] !== enregistres[c]
   const modifieCle = (c: string) => modifieTexte(c) || modifieObjet(c)
@@ -90,11 +98,13 @@ export function EditeurTextes(props: {
   const unModifie = [1, 2, 3, 4].some(modifieEtape)
   useEffect(() => props.onModifie(unModifie), [unModifie]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Objet commun de l'étape (le plus fréquent) et contacts qui ont leur propre texte et/ou leur propre objet
-  const objetDeLEtape = (n: number) => objetCommun(props.contacts, n)
+  // Contacts qui ont leur propre texte et/ou leur propre objet (différent de l'objet commun = le plus fréquent)
   const texteDifferent = (email: string, n: number) => brouillons[cle(email, n)] !== undefined
+  const aRecu = (email: string, n: number) => (props.envois[email] ?? []).includes(n)
+  // Objet propre au contact. Un mail déjà envoyé garde son objet d'origine (pour que le suivi le retrouve) :
+  // ce n'est pas une personnalisation, il n'est pas compté.
   const objetDifferent = (email: string, n: number) =>
-    (objetsEdites[cle(email, n)] ?? objetEnregistre(cle(email, n))) !== objetDeLEtape(n)
+    !aRecu(email, n) && (objetsEdites[cle(email, n)] ?? objetEnregistre(cle(email, n))) !== objetDeLEtape(n)
   const personnalisesEtape = (n: number) => {
     const emails = new Set([
       ...Object.keys(brouillons).filter((c) => !c.startsWith("|") && etapeDeCle(c) === n).map(emailDeCle),
@@ -112,17 +122,34 @@ export function EditeurTextes(props: {
 
   const contactCible = cible ? parEmail.get(cible) : undefined
   const objetCommunIci = objetDeLEtape(etape)
-  const objetCible = cible ? (objetsEdites[k] ?? objetEnregistre(k)) : objetCommunIci
+  const objetCible = objetsEdites[k] ?? objetEnregistre(k)
   const setObjetCible = (v: string) => setObjetsEdites((o) => ({ ...o, [k]: v }))
-  const dejaEnvoye = !!cible && (props.envois[cible] ?? []).includes(etape)
-  const objetIdentique =
-    cible && objetCible.trim()
-      ? [1, 2, 3, 4].find((n) => n !== etape && (contactCible?.[`Sujet${n}`] ?? "").trim() === objetCible.trim())
-      : undefined
+  const dejaEnvoye = !!cible && aRecu(cible, etape)
+  // Même objet qu'une autre étape (pour ce contact, ou en commun) : les deux mails seraient indiscernables
+  const objetIdentique = objetCible.trim()
+    ? [1, 2, 3, 4].find(
+        (n) => n !== etape && (cible ? (contactCible?.[`Sujet${n}`] ?? "") : objetDeLEtape(n)).trim() === objetCible.trim(),
+      )
+    : undefined
+  // Objet commun : contacts à qui il s'applique (ceux qui avaient l'objet commun ou aucun), sauf ceux qui ont
+  // déjà reçu ce mail (le suivi ne le retrouverait plus) ; ceux qui ont leur propre objet ne sont pas touchés
+  const avecEmail = [...parEmail.keys()]
+  const recoiventCommun = avecEmail.filter((e) => {
+    const o = objetEnregistre(cle(e, etape))
+    return (o === objetCommunIci || !o) && !aRecu(e, etape)
+  })
+  const nbDejaRecu = avecEmail.filter((e) => aRecu(e, etape)).length
+  const objetPersoEnregistre = !!cible && objetEnregistre(k) !== objetCommunIci
+  const [confirmerObjet, setConfirmerObjet] = useState(false)
 
   // Aperçu : le contact choisi en haut quand on édite son mail, sinon celui de la liste "Pour"
   const contact = cible ? contactCible : (contactsValides[apercuContact] ?? contactsValides[0])
-  const objet = resoudreVariables(cible ? objetCible : (contact?.[`Sujet${etape}`] ?? ""), contact)
+  // (objet commun en cours de modification : l'aperçu le montre pour les contacts qui le recevront)
+  const objetContact = normaliser(contact?.Email)
+  const objet = resoudreVariables(
+    cible || recoiventCommun.includes(objetContact) ? objetCible : (contact?.[`Sujet${etape}`] ?? ""),
+    contact,
+  )
 
   /** Entoure la sélection (ou insère à la position du curseur) */
   function inserer(avant: string, apres = "", parDefaut = "") {
@@ -149,9 +176,16 @@ export function EditeurTextes(props: {
   async function enregistrer() {
     setSauvegarde(true)
     try {
-      if (cible && modifieObjet(k)) {
+      let message = cible ? `${libelles[etape]} de ${nomContact(contactCible, cible)} enregistré` : `${libelles[etape]} enregistré`
+      if (modifieObjet(k)) {
         const valeur = objetCible.trim()
-        await enregistrerObjet(campagne, cible, etape, valeur)
+        if (cible) {
+          await enregistrerObjet(campagne, [cible], etape, valeur)
+        } else {
+          const r = await enregistrerObjet(campagne, recoiventCommun, etape, valeur, true)
+          if (r.nb > 0) message += ` : objet appliqué à ${r.nb} contact(s)`
+          if (nbDejaRecu > 0) message += ` (${nbDejaRecu} ayant déjà reçu ce mail gardent leur objet)`
+        }
         setObjetsEnregistres((o) => ({ ...o, [k]: valeur }))
         setObjetsEdites((o) => ({ ...o, [k]: valeur }))
       }
@@ -159,7 +193,7 @@ export function EditeurTextes(props: {
         await enregistrerTexte(campagne, etape, texte, cible || undefined)
         setEnregistres((e) => ({ ...e, [k]: texte }))
       }
-      toast.success(cible ? `${libelles[etape]} de ${nomContact(contactCible, cible)} enregistré` : `Texte ${libelles[etape]} enregistré`)
+      toast.success(message)
       props.onEnregistre()
     } catch (e) {
       toast.error((e as Error).message)
@@ -205,21 +239,49 @@ export function EditeurTextes(props: {
     toast.success(`${nomContact(contactCible, cible)} reçoit de nouveau le texte commun pour ${libelles[etape]}`)
   }
 
+  /** Supprime l'objet personnalisé : le contact reprend l'objet commun de l'étape */
+  async function supprimerObjetPerso() {
+    setConfirmerObjet(false)
+    try {
+      await enregistrerObjet(campagne, [cible], etape, objetCommunIci)
+    } catch (e) {
+      toast.error((e as Error).message)
+      return
+    }
+    setObjetsEnregistres((o) => ({ ...o, [k]: objetCommunIci }))
+    setObjetsEdites((o) => {
+      const n = { ...o }
+      delete n[k]
+      return n
+    })
+    toast.success(`${nomContact(contactCible, cible)} reprend l'objet commun pour ${libelles[etape]}`)
+    props.onEnregistre()
+  }
+
   const aCompleter = texte.includes("[A COMPLETER]")
   const nomCible = nomContact(contactCible, cible)
 
   const barreBoutons = (
     <div className="flex flex-wrap gap-2">
-      <Button onClick={enregistrer} disabled={!modifieCle(k) || sauvegarde}>
+      <Button onClick={enregistrer} disabled={!modifieCle(k) || sauvegarde || (!cible && modifieObjet(k) && props.contactsModifies)}>
         {sauvegarde ? <Loader2Icon className="animate-spin" /> : <SaveIcon />} Enregistrer
       </Button>
       <Button variant="ghost" disabled={!modifieCle(k)} onClick={annuler}>
         <Undo2Icon /> Annuler les modifications
       </Button>
-      {textePerso && enregistres[k] !== undefined && (
-        <Button variant="ghost" className="ml-auto" onClick={() => setConfirmerRetour(true)}>
-          <UsersIcon /> Revenir au texte commun
-        </Button>
+      {cible && (objetPersoEnregistre || (textePerso && enregistres[k] !== undefined)) && (
+        <div className="ml-auto flex flex-wrap gap-2">
+          {objetPersoEnregistre && (
+            <Button variant="ghost" onClick={() => setConfirmerObjet(true)} disabled={props.contactsModifies}>
+              <Trash2Icon /> Supprimer l'objet personnalisé
+            </Button>
+          )}
+          {textePerso && enregistres[k] !== undefined && (
+            <Button variant="ghost" onClick={() => setConfirmerRetour(true)}>
+              <Trash2Icon /> Supprimer le mail personnalisé
+            </Button>
+          )}
+        </div>
       )}
     </div>
   )
@@ -276,27 +338,25 @@ export function EditeurTextes(props: {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {/* Objet du mail */}
-            {cible === "" ? (
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border bg-muted/40 px-3 py-2 text-sm">
-                <span className="text-muted-foreground">Objet :</span>
-                {objetCommunIci ? <span className="font-medium">{objetCommunIci}</span> : (
-                  <span className="text-amber-700 dark:text-amber-300">aucun (pas de {libelles[etape]})</span>
-                )}
-                <button className="ml-auto text-xs underline underline-offset-2 hover:text-foreground" onClick={props.onVoirContacts}>
-                  Modifier l'objet de tous (onglet Contacts)
-                </button>
-              </div>
-            ) : contactCible ? (
+            {/* Objet du mail : commun (tous les contacts) ou propre au contact choisi */}
+            {cible === "" || contactCible ? (
               <div className="space-y-1.5">
-                <label className="text-xs font-medium" htmlFor="objet-contact">Objet pour {nomCible}</label>
+                <label className="text-xs font-medium" htmlFor="objet-mail">
+                  {cible ? `Objet pour ${nomCible}` : "Objet (tous les contacts)"}
+                </label>
                 <Input
-                  id="objet-contact"
+                  id="objet-mail"
                   value={objetCible}
                   onChange={(e) => setObjetCible(e.target.value)}
                   disabled={props.contactsModifies}
                   aria-invalid={objetIdentique ? true : undefined}
-                  placeholder="Vide : pas de mail à cette étape pour ce contact"
+                  placeholder={
+                    cible
+                      ? "Vide : pas de mail à cette étape pour ce contact"
+                      : etape === 1
+                        ? "[{{ENTREPRISE}}] Échangeons sur vos priorités"
+                        : `Vide : pas de ${libelles[etape]}, la séquence s'arrête avant`
+                  }
                 />
                 {props.contactsModifies ? (
                   <p className="text-xs text-amber-700 dark:text-amber-300">
@@ -304,23 +364,32 @@ export function EditeurTextes(props: {
                   </p>
                 ) : (
                   <>
-                    {objetCible !== objetCommunIci && (
+                    {!cible && (
                       <p className="text-xs text-muted-foreground">
-                        Objet commun : « {objetCommunIci || "aucun"} ».{" "}
-                        <button className="underline underline-offset-2 hover:text-foreground" onClick={() => setObjetCible(objetCommunIci)}>
-                          Reprendre l'objet commun
-                        </button>
+                        Variables possibles : {"{{CIVILITE}}"}, {"{{PRENOM}}"}, {"{{NOM}}"}, {"{{ENTREPRISE}}"}.
+                        {etape > 1 && " Un objet vide arrête la séquence avant cette relance."}
                       </p>
+                    )}
+                    {cible && objetCible !== objetCommunIci && (
+                      <p className="text-xs text-muted-foreground">Objet commun : « {objetCommunIci || "aucun"} ».</p>
                     )}
                     {objetIdentique && (
                       <p className="text-xs text-destructive">
-                        Identique à son objet Mail{objetIdentique} : l'outil ne pourrait pas distinguer les deux mails.
+                        Identique {cible ? "à son" : "à l'"} objet Mail{objetIdentique} : l'outil ne pourrait pas distinguer les deux
+                        mails. Donne un objet différent à chaque étape, par exemple avec « Re: » devant.
                       </p>
                     )}
-                    {dejaEnvoye && modifieObjet(k) && (
+                    {cible && dejaEnvoye && modifieObjet(k) && (
                       <p className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300">
                         <TriangleAlertIcon className="mt-0.5 size-3.5 shrink-0" />
                         {libelles[etape]} est déjà parti pour ce contact : avec un autre objet, le suivi ne retrouvera plus ce mail.
+                      </p>
+                    )}
+                    {!cible && modifieObjet(k) && nbDejaRecu > 0 && (
+                      <p className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300">
+                        <TriangleAlertIcon className="mt-0.5 size-3.5 shrink-0" />
+                        {nbDejaRecu} contact(s) ont déjà reçu {libelles[etape]} : ils gardent leur objet actuel, pour que le suivi
+                        retrouve leur mail.
                       </p>
                     )}
                   </>
@@ -436,7 +505,7 @@ export function EditeurTextes(props: {
       <AlertDialog open={confirmerRetour} onOpenChange={(o) => !o && setConfirmerRetour(false)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Revenir au texte commun pour {nomCible} ?</AlertDialogTitle>
+            <AlertDialogTitle>Supprimer le mail personnalisé de {nomCible} ?</AlertDialogTitle>
             <AlertDialogDescription>
               Son texte personnalisé de {libelles[etape]} sera supprimé, et il recevra le texte commun comme les autres contacts.
               Son objet ne change pas.
@@ -444,7 +513,23 @@ export function EditeurTextes(props: {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Annuler</AlertDialogCancel>
-            <Button variant="destructive" onClick={revenirAuCommun}>Supprimer son texte</Button>
+            <Button variant="destructive" onClick={revenirAuCommun}>Supprimer le mail personnalisé</Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmerObjet} onOpenChange={(o) => !o && setConfirmerObjet(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer l'objet personnalisé de {nomCible} ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Son objet de {libelles[etape]} redevient l'objet commun : « {objetCommunIci || "aucun"} ».
+              {dejaEnvoye && " Attention : ce mail lui a déjà été envoyé avec son objet personnalisé, le suivi ne le retrouvera plus."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <Button variant="destructive" onClick={supprimerObjetPerso}>Supprimer l'objet personnalisé</Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

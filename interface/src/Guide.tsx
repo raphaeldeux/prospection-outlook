@@ -214,8 +214,8 @@ export function Guide() {
                 Clique sur <strong>Nouvelle campagne</strong> en bas à gauche : donne un titre (par exemple « Souveraineté du
                 cloud ») et choisis le mois et l'année de lancement.
               </li>
-              <li>Onglet <strong>Contacts</strong> : renseigne les objets des mails, puis ajoute tes destinataires.</li>
-              <li>Onglet <strong>Textes des mails</strong> : rédige Mail1 à Mail4.</li>
+              <li>Onglet <strong>Contacts</strong> : ajoute tes destinataires.</li>
+              <li>Onglet <strong>Textes des mails</strong> : pour Mail1 à Mail4, saisis l'objet et rédige le texte.</li>
               <li>Onglet <strong>Suivi et brouillons</strong> : crée les brouillons du Mail1.</li>
             </ol>
             <p>
@@ -226,9 +226,10 @@ export function Guide() {
 
           <Section id="objets" titre="Les objets des mails">
             <p>
-              Dans l'onglet Contacts, le bloc <strong>Objets des mails</strong> définit l'objet de chaque étape. Il s'applique
-              directement à tous les contacts. Pour donner un autre objet à un contact précis, va dans l'onglet{" "}
-              <strong>Textes des mails</strong> (voir « Un objet ou un texte différent pour un contact »).
+              L'objet de chaque étape se saisit dans l'onglet <strong>Textes des mails</strong>, au-dessus du texte, avec «
+              tous les contacts » choisi. Il s'applique à tous les contacts, y compris ceux ajoutés plus tard. Pour donner un
+              autre objet à un contact précis, choisis-le dans la même liste (voir « Un objet ou un texte différent pour un
+              contact »).
             </p>
             <p>
               Les variables <Code>{"{{CIVILITE}}"}</Code>, <Code>{"{{PRENOM}}"}</Code>, <Code>{"{{NOM}}"}</Code> et{" "}
@@ -242,6 +243,10 @@ export function Guide() {
               <li>
                 <strong>Chaque étape doit avoir un objet différent</strong>, par exemple en ajoutant « Re: » devant : l'outil
                 reconnaît une étape à son objet. Une alerte rouge signale les objets identiques.
+              </li>
+              <li>
+                Changer l'objet d'une étape déjà envoyée ne touche pas les contacts qui ont déjà reçu ce mail : ils gardent leur
+                objet, pour que le suivi retrouve leur mail.
               </li>
             </ul>
           </Section>
@@ -318,7 +323,7 @@ export function Guide() {
                 Dans la liste <strong>« Mail1 pour »</strong>, remplace « tous les contacts » par le contact voulu.
               </li>
               <li>
-                Modifie son <strong>objet</strong> dans le champ « Objet pour … » (« Reprendre l'objet commun » annule).
+                Modifie son <strong>objet</strong> dans le champ « Objet pour … ».
               </li>
               <li>
                 Pour le texte, clique sur <strong>Écrire un texte pour …</strong> : le texte commun est recopié comme point de
@@ -332,7 +337,10 @@ export function Guide() {
                 Les contacts concernés sont listés sous le texte commun, marqués « perso » dans les onglets d'étape, et signalés
                 dans le suivi (« Texte perso : Mail1, Mail3 »).
               </li>
-              <li><strong>Revenir au texte commun</strong> supprime son texte personnalisé (son objet ne change pas).</li>
+              <li>
+                <strong>Supprimer l'objet personnalisé</strong> et <strong>Supprimer le mail personnalisé</strong> lui redonnent
+                l'objet et le texte de la campagne (une confirmation est demandée).
+              </li>
               <li>
                 Ne change pas l'objet d'une étape déjà envoyée à ce contact : le suivi ne retrouverait plus le mail (un message
                 orange le rappelle).

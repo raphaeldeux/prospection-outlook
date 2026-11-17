@@ -53,3 +53,9 @@ export function objetCommun(contacts: LigneContact[], etape: number) {
 
 /** Colonnes d'objet (Sujet1..Sujet4) : modifiées dans le bloc « Objets des mails » et l'onglet Textes, pas dans le tableau */
 export const estColonneObjet = (colonne: string) => /^Sujet[1-4]$/.test(colonne)
+
+/** Objet commun d'une étape : celui mémorisé pour la campagne, sinon (ancienne campagne) le plus fréquent */
+export function objetDeCampagne(objets: (string | null)[] | null | undefined, contacts: LigneContact[], etape: number) {
+  const o = objets?.[etape - 1]
+  return typeof o === "string" ? o : objetCommun(contacts, etape)
+}

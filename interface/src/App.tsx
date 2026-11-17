@@ -152,7 +152,12 @@ export default function App() {
 
   // Vérifie une fois au démarrage si une mise à jour est disponible (pastille sur « Paramètres »)
   const [majDispo, setMajDispo] = useState(false)
+  // Version installée, affichée à côté du nom de l'outil (lecture locale, sans attendre GitHub)
+  const [versionInstallee, setVersionInstallee] = useState("")
   useEffect(() => {
+    chargerVersion(true)
+      .then((v) => setVersionInstallee(v.installee?.version ?? ""))
+      .catch(() => {})
     chargerVersion()
       .then((v) => setMajDispo(v.aJour === false))
       .catch(() => {})
@@ -233,6 +238,15 @@ export default function App() {
         <div className="flex items-center gap-2 px-4 py-4">
           <MailPlusIcon className="size-5" />
           <span className="font-semibold">Prospection</span>
+          {versionInstallee && (
+            <button
+              className="text-xs text-muted-foreground tabular-nums hover:text-foreground"
+              onClick={() => choisir(PARAMETRES)}
+              title="Version installée : voir les mises à jour"
+            >
+              {versionInstallee}
+            </button>
+          )}
         </div>
         <div className="px-2 pb-3">
           <button
@@ -470,7 +484,7 @@ function VueCampagne(props: {
     // Pourquoi personne n'est prêt : affiché dans la confirmation
     const concernes = contacts.filter((c) => c.NbEtapes >= n && !c[`Mail${n}` as "Mail1"])
     const detail = [
-      prevus === 0 && `aucun contact n'a d'objet pour Mail${n} (onglet Contacts)`,
+      prevus === 0 && `aucun contact n'a d'objet pour Mail${n} (onglet Textes des mails)`,
       enAttente > 0 && `${enAttente} attendent le délai de ${campagne.DelaiRelance} jour(s)`,
       brouillons > 0 && `${brouillons} ont déjà un brouillon à envoyer`,
       n > 1 && concernes.filter((c) => etapeSuivante(c) < n && c.Code !== "repondu").length > 0 &&
@@ -532,6 +546,7 @@ function VueCampagne(props: {
               campagne={campagne.Nom}
               colonnes={fichiers.colonnes}
               contacts={fichiers.contacts}
+              objets={fichiers.objets}
               campagneDemarree={campagneDemarree}
               envois={envois}
               onEnregistre={apresEnregistrement}
@@ -552,7 +567,7 @@ function VueCampagne(props: {
               contacts={fichiers.contacts}
               envois={envois}
               contactsModifies={!!props.modifs.contacts}
-              onVoirContacts={() => setOnglet("contacts")}
+              objets={fichiers.objets}
               etape={props.etapeTexte}
               setEtape={props.setEtapeTexte}
               onEnregistre={apresEnregistrement}
@@ -582,7 +597,7 @@ function VueCampagne(props: {
                 {e.prevus === 0 && contacts.length > 0 ? (
                   <p className="text-xs text-muted-foreground">
                     Étape non prévue (aucun objet Mail{e.n}).{" "}
-                    <button className="underline underline-offset-2 hover:text-foreground" onClick={() => setOnglet("contacts")}>
+                    <button className="underline underline-offset-2 hover:text-foreground" onClick={() => { props.setEtapeTexte(e.n); setOnglet("textes") }}>
                       Ajouter cette relance
                     </button>
                   </p>

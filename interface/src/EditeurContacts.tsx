@@ -11,11 +11,11 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { ImportContacts } from "@/ImportContacts"
 import { enregistrerContacts, type LigneContact } from "@/lib/api"
-import { estColonneObjet, estEmailValide, objetCommun } from "@/lib/apercu"
+import { estColonneObjet, estEmailValide, objetDeCampagne } from "@/lib/apercu"
 import { normaliserCivilite } from "@/lib/import"
 import { cn } from "@/lib/utils"
 
@@ -37,7 +37,7 @@ const largeur: Record<string, string> = {
   Nom: "w-40",
   Entreprise: "w-44",
   Telephone: "w-32",
-  Email: "w-64",
+  Email: "min-w-80",
 }
 
 const ligneVide = (colonnes: string[]): LigneContact => Object.fromEntries(colonnes.map((c) => [c, ""]))
@@ -46,6 +46,8 @@ export function EditeurContacts(props: {
   campagne: string
   colonnes: string[]
   contacts: LigneContact[]
+  /** Objets communs mémorisés pour la campagne (parametres.json), donnés aux contacts ajoutés */
+  objets?: (string | null)[] | null
   campagneDemarree: boolean
   /** Étapes déjà envoyées, par adresse e-mail (en minuscules), d'après le suivi Outlook */
   envois: Record<string, number[]>
@@ -62,11 +64,9 @@ export function EditeurContacts(props: {
   const [sauvegarde, setSauvegarde] = useState(false)
   const [aSupprimer, setASupprimer] = useState<number | null>(null)
   const [importOuvert, setImportOuvert] = useState(false)
-  // Bloc des objets : replie par defaut quand les objets sont deja definis (gagne de la place pour le tableau)
-  const [objetsOuverts, setObjetsOuverts] = useState(false)
-  const [objets, setObjets] = useState<string[]>(() =>
-    [1, 2, 3, 4].map((n) => objetCommun(props.contacts, n)),
-  )
+  // Objets communs (les plus fréquents parmi les contacts enregistrés) : donnés aux contacts ajoutés ici. Ils se
+  // modifient dans l'onglet Textes des mails.
+  const objets = useMemo(() => [1, 2, 3, 4].map((n) => objetDeCampagne(props.objets, props.contacts, n)), [props.objets, props.contacts])
 
   const modifie = JSON.stringify(lignes) !== reference
   useEffect(() => props.onModifie(modifie), [modifie]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -78,7 +78,6 @@ export function EditeurContacts(props: {
     if (modifie || recu === reference) return
     setLignes(props.contacts)
     setReference(recu)
-    setObjets([1, 2, 3, 4].map((n) => objetCommun(props.contacts, n)))
   }, [recu]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const erreurs = useMemo(
@@ -120,25 +119,8 @@ export function EditeurContacts(props: {
   const modifier = (i: number, col: string, v: string) =>
     setLignes((ls) => ls.map((l, j) => (j === i ? { ...l, [col]: v } : l)))
 
-  /** Objet commun d'une étape : appliqué tout de suite aux contacts qui avaient l'objet commun ou aucun objet */
-  function changerObjet(n: number, valeur: string) {
-    const col = `Sujet${n}`
-    const ancien = objets[n - 1]
-    setObjets((o) => o.map((x, k) => (k === n - 1 ? valeur : x)))
-    setLignes((ls) => ls.map((l) => ((l[col] ?? "") === ancien || !(l[col] ?? "") ? { ...l, [col]: valeur } : l)))
-  }
-
-  /** Force l'objet commun aussi sur les contacts qui avaient un objet personnalisé */
-  function appliquerObjet(n: number) {
-    setLignes((ls) => ls.map((l) => ({ ...l, [`Sujet${n}`]: objets[n - 1] })))
-  }
-
-  const personnalises = (n: number) => lignes.filter((l) => (l[`Sujet${n}`] ?? "") !== objets[n - 1]).length
-
   function annuler() {
-    const ref: LigneContact[] = JSON.parse(reference)
-    setLignes(ref)
-    setObjets([1, 2, 3, 4].map((n) => objetCommun(ref, n)))
+    setLignes(JSON.parse(reference))
   }
 
   const ligneAvecObjets = (): LigneContact => ({
@@ -220,87 +202,8 @@ export function EditeurContacts(props: {
     }
   }
 
-  // Objets en conflit (identiques ou début d'un objet précédent) : le bloc doit rester ouvert pour les corriger
-  const objetsEnConflit = [2, 3, 4].some((n) => {
-    const o = objets[n - 1].trim()
-    return o && [1, 2, 3].some((m) => m < n && objets[m - 1].trim() === o)
-  })
-  const blocObjetsOuvert = objetsOuverts || objetsEnConflit || !objets[0].trim()
-
   return (
     <div className="space-y-4">
-      {!blocObjetsOuvert ? (
-        <Card size="sm">
-          <CardContent className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-            <span className="font-medium">Objets des mails</span>
-            {[1, 2, 3, 4].filter((n) => objets[n - 1].trim()).map((n) => (
-              <span key={n} className="max-w-80 truncate text-muted-foreground" title={objets[n - 1]}>
-                Mail{n} : {objets[n - 1]}
-              </span>
-            ))}
-            <div className="flex-1" />
-            <Button size="sm" variant="outline" onClick={() => setObjetsOuverts(true)}>Modifier les objets</Button>
-          </CardContent>
-        </Card>
-      ) : (
-      <Card size="sm">
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between text-sm">
-            Objets des mails
-            {objets[0].trim() && !objetsEnConflit && (
-              <Button size="xs" variant="ghost" onClick={() => setObjetsOuverts(false)}>Replier</Button>
-            )}
-          </CardTitle>
-          <CardDescription>
-            L'objet saisi ici s'applique directement à tous les contacts. Les variables {"{{CIVILITE}}"}, {"{{PRENOM}}"},{" "}
-            {"{{NOM}}"} et {"{{ENTREPRISE}}"} sont remplacées pour chaque contact. Un objet vide arrête la séquence à cette étape.
-            Pour donner un autre objet à un contact précis : onglet Textes des mails, avec son texte.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {campagneDemarree && (
-            <p className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300">
-              <TriangleAlertIcon className="mt-0.5 size-3.5 shrink-0" />
-              Des mails sont déjà partis : ne modifie pas l'objet d'une étape déjà envoyée, le suivi ne retrouverait plus ces mails.
-            </p>
-          )}
-          {[1, 2, 3, 4].map((n) => {
-            const autres = personnalises(n)
-            // Le suivi reconnait une etape a l'objet du mail (prefixe le plus long) : seul un objet IDENTIQUE a
-            // celui d'une etape precedente rend les deux mails indiscernables.
-            const objet = objets[n - 1].trim()
-            const conflit = objet ? [1, 2, 3, 4].find((m) => m < n && objets[m - 1].trim() === objet) : undefined
-            return (
-              <div key={n} className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <span className="w-24 shrink-0 text-xs text-muted-foreground">Mail{n}</span>
-                <Input
-                  className="min-w-0 flex-1"
-                  value={objets[n - 1]}
-                  onChange={(e) => changerObjet(n, e.target.value)}
-                  aria-invalid={conflit ? true : undefined}
-                  placeholder={n === 1 ? "[{{ENTREPRISE}}] Échangeons sur vos priorités" : "Laisser vide pour ne pas faire cette relance"}
-                />
-                {conflit && (
-                  <span className="w-full pl-26 text-xs text-destructive">
-                    Identique à l'objet Mail{conflit} : l'outil ne pourrait pas distinguer les deux mails, et ne préparerait
-                    pas ce Mail{n}. Donne-lui un objet différent, par exemple en ajoutant « Re: » devant.
-                  </span>
-                )}
-                {autres > 0 && lignes.length > 0 && (
-                  <span className="w-full pl-26 text-xs text-muted-foreground">
-                    {autres} contact(s) ont leur propre objet pour Mail{n} (visible dans l'onglet Textes des mails).{" "}
-                    <button className="underline underline-offset-2 hover:text-foreground" onClick={() => appliquerObjet(n)}>
-                      Leur appliquer celui-ci
-                    </button>
-                  </span>
-                )}
-              </div>
-            )
-          })}
-        </CardContent>
-      </Card>
-      )}
-
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-xs text-muted-foreground">
           Astuce : colle un bloc copié depuis Excel directement dans une case du tableau. <kbd>Entrée</kbd> passe à la ligne
@@ -420,14 +323,13 @@ export function EditeurContacts(props: {
         Ajoute les nouveaux contacts en fin de liste et ne réordonne pas les lignes d'une campagne lancée : l'objet de chaque mail
         dépend de la position du contact.
       </p>
-
+      {/* Barre d'enregistrement, à droite sous le tableau, sans cadre : reste visible en bas de l'écran tant qu'il y a des modifications */}
       {/* Barre d'enregistrement flottante, alignée sur la page : reste visible en bas de l'écran tant qu'il y a des modifications */}
       {modifie && (
-        <div className="sticky bottom-4 z-10 flex flex-wrap items-center gap-3 rounded-xl border bg-background/95 px-4 py-3 shadow-lg backdrop-blur">
+        <div className="sticky bottom-4 z-10 ml-auto flex w-fit flex-wrap items-center justify-end gap-3 rounded-lg bg-background/95 py-1 pl-3 backdrop-blur">
           <span className="flex items-center gap-2 text-sm font-medium">
             <span className="size-2 rounded-full bg-amber-500" /> Modifications non enregistrées
           </span>
-          <div className="flex-1" />
           <Button variant="ghost" onClick={annuler} disabled={sauvegarde}>
             <Undo2Icon /> Annuler
           </Button>

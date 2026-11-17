@@ -7,7 +7,7 @@
 #   POST /api/fichiers  -> contenu de contacts.csv et des textes Mail1..4 d'une campagne
 #   PUT  /api/contacts  -> enregistre contacts.csv (UTF-8 avec BOM, separateur ;)
 #   PUT  /api/texte     -> enregistre Textes\MailN.txt, ou le texte personnalise d'un contact (champ email)
-#   PUT  /api/objet     -> objet d'une etape pour un contact (colonne SujetN de sa ligne dans contacts.csv)
+#   PUT  /api/objet     -> objet d'une etape pour un ou plusieurs contacts (colonne SujetN de leurs lignes)
 #   PUT  /api/parametres -> enregistre les reglages de la campagne (delai avant relance)
 #   POST /api/ouvrir    -> ouvre le dossier de la campagne dans l'Explorateur
 #   POST /api/outlook-brouillons -> affiche le dossier Brouillons dans Outlook
@@ -153,6 +153,23 @@ function Read-TextesPersonnalises {
     return $res
 }
 
+function Read-Parametres {
+    # parametres.json d'une campagne -> [ordered]@{ DelaiRelanceJours = 3; Objets = @(4 objets communs) ... }
+    param([string]$Dossier)
+    $res = [ordered]@{}
+    $f = Join-Path $Dossier "parametres.json"
+    if (Test-Path $f) {
+        try { (Get-Content $f -Raw -Encoding UTF8 | ConvertFrom-Json).PSObject.Properties | ForEach-Object { $res[$_.Name] = $_.Value } } catch {}
+    }
+    return $res
+}
+
+function Save-Parametres {
+    # Reecrit parametres.json en gardant tous les reglages (delai, objets communs...)
+    param([string]$Dossier, $Parametres)
+    Write-FichierCampagne -Chemin (Join-Path $Dossier "parametres.json") -Contenu ([pscustomobject]$Parametres | ConvertTo-Json -Depth 4)
+}
+
 function Read-Corps { param($Req) (New-Object IO.StreamReader($Req.InputStream, $utf8)).ReadToEnd() | ConvertFrom-Json }
 
 function Write-FichierCampagne {
@@ -288,7 +305,10 @@ try {
                             [pscustomobject]@{ email = $p.Key; etape = [int]$e.Key; contenu = ([string]$e.Value) -replace "`r`n", "`n" }
                         }
                     })
-                    Send-Json $ctx 200 @{ colonnes = $colonnes; contacts = $contacts; textes = $textes; personnalises = $personnalises }
+                    # objets communs des 4 etapes (parametres.json) ; absent pour une ancienne campagne : l'interface
+                    # prend alors l'objet le plus frequent parmi les contacts
+                    $objets = (Read-Parametres $dossier)["Objets"]
+                    Send-Json $ctx 200 @{ colonnes = $colonnes; contacts = $contacts; textes = $textes; personnalises = $personnalises; objets = $objets }
                     continue
                 }
 
@@ -311,13 +331,15 @@ try {
                 }
 
                 if ($chemin -eq "/api/objet" -and $req.HttpMethod -eq "PUT") {
-                    # Objet d'une etape pour UN contact (colonne SujetN de sa ligne dans contacts.csv), modifie depuis
-                    # l'onglet Textes : seule cette case change, le reste du fichier est reecrit a l'identique.
+                    # Objet d'une etape pour les contacts donnes (colonne SujetN de leurs lignes dans contacts.csv), modifie
+                    # depuis l'onglet Textes : un contact (objet personnalise) ou plusieurs (objet commun). Seules ces cases
+                    # changent, le reste du fichier est reecrit a l'identique. C'est l'interface qui choisit les contacts
+                    # (par ex. pas ceux qui ont deja recu ce mail, pour que le suivi le retrouve encore).
                     $corps = Read-Corps $req
                     $dossier = Get-DossierCampagne $corps.campagne
                     $etape = [int]$corps.etape
-                    $email = ([string]$corps.email).Trim().ToLower()
-                    if (-not $dossier -or $etape -notin 1..4 -or -not $email) { Send-Json $ctx 400 @{ erreur = "Campagne, etape ou contact invalide." }; continue }
+                    $emails = @(@($corps.emails) + @($corps.email) | ForEach-Object { ([string]$_).Trim().ToLower() } | Where-Object { $_ })
+                    if (-not $dossier -or $etape -notin 1..4 -or ($emails.Count -eq 0 -and -not $corps.commun)) { Send-Json $ctx 400 @{ erreur = "Campagne, etape ou contacts invalides." }; continue }
                     $csv = Join-Path $dossier "contacts.csv"
                     $entete = @((Get-Content $csv -Encoding UTF8 -TotalCount 1) -split ';' | ForEach-Object { $_.Trim('"') } | Where-Object { $_ })
                     $colonnes = @($entete) + @($colonnesStandard | Where-Object { $_ -notin $entete })
@@ -326,16 +348,24 @@ try {
                     $lignes = New-Object System.Collections.Generic.List[string]
                     $lignes.Add(($colonnes | ForEach-Object { ConvertTo-ChampCsv $_ }) -join ';')
                     foreach ($contact in @(Import-Csv -Path $csv -Delimiter ';' -Encoding UTF8)) {
-                        if (([string]$contact.Email).Trim().ToLower() -eq $email) {
+                        if (([string]$contact.Email).Trim().ToLower() -in $emails) {
                             $contact | Add-Member -NotePropertyName "Sujet$etape" -NotePropertyValue $objet.Trim() -Force
                             $nb++
                         }
                         $lignes.Add((($colonnes | ForEach-Object { ConvertTo-ChampCsv ([string]$contact.$_) }) -join ';'))
                     }
-                    if ($nb -eq 0) { Send-Json $ctx 404 @{ erreur = "Contact introuvable dans contacts.csv (adresse modifiee ?)." }; continue }
+                    if ($nb -eq 0 -and -not $corps.commun) { Send-Json $ctx 404 @{ erreur = "Contact introuvable dans contacts.csv (adresse modifiee ?)." }; continue }
                     Write-FichierCampagne -Chemin $csv -Contenu (($lignes -join "`r`n") + "`r`n")
-                    Write-Host "$(Get-Date -Format HH:mm:ss) Objet Mail$etape modifie pour $email - $($corps.campagne)"
-                    Send-Json $ctx 200 @{ ok = $true }
+                    if ($corps.commun) {
+                        # objet commun de l'etape : memorise dans parametres.json (donne aux contacts ajoutes ensuite)
+                        $p = Read-Parametres $dossier
+                        $objets = @(1..4 | ForEach-Object { if ($p["Objets"] -and @($p["Objets"]).Count -ge $_) { [string]@($p["Objets"])[$_ - 1] } else { $null } })
+                        $objets[$etape - 1] = $objet.Trim()
+                        $p["Objets"] = $objets
+                        Save-Parametres $dossier $p
+                    }
+                    Write-Host "$(Get-Date -Format HH:mm:ss) Objet Mail$etape modifie pour $nb contact(s) - $($corps.campagne)"
+                    Send-Json $ctx 200 @{ ok = $true; nb = $nb }
                     continue
                 }
 
@@ -376,8 +406,9 @@ try {
                     if (-not $dossier -or $null -eq $delai -or $delai -lt 0 -or $delai -gt 90) {
                         Send-Json $ctx 400 @{ erreur = "Delai invalide (entre 0 et 90 jours)." }; continue
                     }
-                    $json = [pscustomobject]@{ DelaiRelanceJours = $delai } | ConvertTo-Json
-                    Write-FichierCampagne -Chemin (Join-Path $dossier "parametres.json") -Contenu $json
+                    $p = Read-Parametres $dossier
+                    $p["DelaiRelanceJours"] = $delai
+                    Save-Parametres $dossier $p
                     Write-Host "$(Get-Date -Format HH:mm:ss) Delai avant relance : $delai jour(s) - $($corps.campagne)"
                     Send-Json $ctx 200 @{ ok = $true }
                     continue

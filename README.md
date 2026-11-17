@@ -7,8 +7,8 @@ L'outil prépare des **brouillons** dans Outlook, avec ta signature. **Rien n'es
 Tout se fait depuis une interface web locale :
 
 - création des campagnes ;
-- saisie des contacts (ou collage depuis Excel ou Outlook) et des objets de mail ;
-- rédaction des 4 mails, avec aperçu ;
+- saisie des contacts (ou collage depuis Excel ou Outlook) ;
+- rédaction des 4 mails, objet et texte, avec aperçu ;
 - **objet et texte personnalisés** pour un contact précis, à n'importe quelle étape ;
 - suivi contact par contact : mails envoyés, réponses, relance possible ;
 - création des brouillons en un clic ;
@@ -65,7 +65,7 @@ contacts.csv              contacts et objets des 4 mails (colonnes Sujet1 à Suj
 Textes\Mail1.txt … Mail4.txt   textes communs
 Textes\personnalises.json      textes propres à certains contacts (par adresse e-mail)
 issues.json               issue de chaque contact clos (RDV obtenu, pas intéressé…)
-parametres.json           délai avant relance
+parametres.json           délai avant relance et objets communs des 4 mails
 ```
 
 ## Organisation du dépôt

@@ -115,13 +115,15 @@ export type Fichiers = {
   contacts: LigneContact[]
   textes: { etape: number; contenu: string }[]
   personnalises: TextePersonnalise[]
+  /** Objets communs des 4 étapes (parametres.json) ; absents pour une ancienne campagne */
+  objets?: (string | null)[] | null
 }
 
 export async function chargerFichiers(campagne: string): Promise<Fichiers> {
   const f = await lire<Fichiers>(
     await fetch("/api/fichiers", { method: "POST", headers: entetes, body: JSON.stringify({ campagne }) }),
   )
-  return { colonnes: tableau(f.colonnes), contacts: tableau(f.contacts), textes: tableau(f.textes), personnalises: tableau(f.personnalises) }
+  return { colonnes: tableau(f.colonnes), contacts: tableau(f.contacts), textes: tableau(f.textes), personnalises: tableau(f.personnalises), objets: f.objets ? tableau(f.objets) : null }
 }
 
 export async function enregistrerContacts(campagne: string, colonnes: string[], contacts: LigneContact[]) {
@@ -187,9 +189,12 @@ export async function lancerMiseAJour() {
   return lire<{ ok: boolean }>(await fetch("/api/mettre-a-jour", { method: "POST", headers: entetes }))
 }
 
-/** Objet d'une étape pour un seul contact (colonne SujetN de sa ligne dans contacts.csv) */
-export async function enregistrerObjet(campagne: string, email: string, etape: number, objet: string) {
-  return lire<{ ok: boolean }>(
-    await fetch("/api/objet", { method: "PUT", headers: entetes, body: JSON.stringify({ campagne, email, etape, objet }) }),
+/**
+ * Objet d'une étape pour les contacts donnés (colonne SujetN de leurs lignes dans contacts.csv).
+ * commun : c'est aussi le nouvel objet commun de l'étape (mémorisé dans parametres.json).
+ */
+export async function enregistrerObjet(campagne: string, emails: string[], etape: number, objet: string, commun = false) {
+  return lire<{ ok: boolean; nb: number }>(
+    await fetch("/api/objet", { method: "PUT", headers: entetes, body: JSON.stringify({ campagne, emails, etape, objet, commun }) }),
   )
 }
