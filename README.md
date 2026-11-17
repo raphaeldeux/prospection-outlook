@@ -27,6 +27,10 @@ Les relances s'arrêtent d'elles-mêmes pour un contact qui a répondu. Les rép
 
 ![Suivi d'une campagne : étapes, statuts et actions par contact](docs/images/campagne.png)
 
+**Les textes des mails** se rédigent avec un aperçu. Un contact peut recevoir un objet et un texte qui lui sont propres, à n'importe quelle étape.
+
+![Onglet Textes : objet et texte personnalisés d'un contact, avec l'aperçu du mail](docs/images/textes.png)
+
 *Captures réalisées avec des données fictives.*
 
 ## Installation (utilisateurs)
