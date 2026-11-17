@@ -10,6 +10,8 @@
 #   PUT  /api/parametres -> enregistre les reglages de la campagne (delai avant relance)
 #   POST /api/ouvrir    -> ouvre le dossier de la campagne dans l'Explorateur
 #   POST /api/outlook-brouillons -> affiche le dossier Brouillons dans Outlook
+#   GET  /api/version   -> version installee / derniere version publiee (+ nouveautes)
+#   POST /api/mettre-a-jour -> lance la mise a jour (installeur) puis redemarre l'interface
 #   PUT  /api/issue     -> issue d'un contact (RDV, pas interesse...) dans issues.json
 #   POST /api/outlook-reponse -> ouvre dans Outlook le dernier mail recu d'un contact
 #   POST /api/campagnes -> cree une campagne a partir de "_Modele campagne"
@@ -64,6 +66,53 @@ function Invoke-ScriptEnfant {
 }
 
 function Q { param([string]$s) "'" + ($s -replace "'", "''") + "'" }   # chaine PowerShell entre quotes
+
+$depotGitHub = "raphaeldeux/prospection-outlook"
+
+function Get-InfosVersion {
+    # Version installee (version.txt : "<version> <date>") et derniere version publiee de l'outil
+    # (dernier changement du dossier outil/ du depot + derniere release, pour les nouveautes)
+    $installee = $null
+    $fv = Join-Path $racine "version.txt"
+    if (Test-Path $fv) {
+        $l = ("" + (Get-Content $fv -TotalCount 1)).Trim().Split(" ")
+        $installee = [ordered]@{ version = $l[0]; date = if ($l.Count -gt 1) { $l[1] } else { "" } }
+    }
+    $publiee = $null; $release = $null
+    try {
+        $c = @(Invoke-RestMethod "https://api.github.com/repos/$depotGitHub/commits?path=outil&sha=main&per_page=1" -TimeoutSec 10)[0]
+        $publiee = [ordered]@{ version = $c.sha.Substring(0, 7); date = ([datetime]$c.commit.committer.date).ToLocalTime().ToString("dd/MM/yyyy") }
+    } catch {}
+    try {
+        $r = Invoke-RestMethod "https://api.github.com/repos/$depotGitHub/releases/latest" -TimeoutSec 10
+        $release = [ordered]@{ nom = [string]$r.name; notes = [string]$r.body; url = [string]$r.html_url; date = ([datetime]$r.published_at).ToLocalTime().ToString("dd/MM/yyyy") }
+    } catch {}
+    $aJour = if ($installee -and $publiee) { $installee.version -eq $publiee.version } else { $null }
+    return [ordered]@{ installee = $installee; publiee = $publiee; aJour = $aJour; release = $release; dossier = $racine }
+}
+
+# Script lance (dans une fenetre visible) pour mettre a jour depuis l'interface : arrete ce serveur et sa
+# fenetre, lance l'installeur en mode mise a jour sur ce dossier, puis redemarre l'interface.
+$scriptMiseAJour = @'
+param([int]$ServeurPid, [string]$Dossier, [int]$Port = 8765)
+$Host.UI.RawUI.WindowTitle = "Mise a jour de Prospection Outlook"
+Write-Host "Mise a jour de Prospection Outlook en cours : ne ferme pas cette fenetre." -ForegroundColor Cyan
+Start-Sleep -Seconds 1
+$parent = (Get-CimInstance Win32_Process -Filter "ProcessId=$ServeurPid" -ErrorAction SilentlyContinue).ParentProcessId
+Stop-Process -Id $ServeurPid -Force -ErrorAction SilentlyContinue
+if ($parent) {
+    $p = Get-Process -Id $parent -ErrorAction SilentlyContinue
+    if ($p -and $p.ProcessName -eq "cmd") { Stop-Process -Id $parent -Force -ErrorAction SilentlyContinue }
+}
+$env:PROSPECTION_DOSSIER = $Dossier; $env:PROSPECTION_DEV = "N"; $env:PROSPECTION_FORCER = "1"
+cmd /c "`"$Dossier\Installer ou mettre a jour.bat`" < nul"
+$env:PROSPECTION_DOSSIER = $null; $env:PROSPECTION_DEV = $null; $env:PROSPECTION_FORCER = $null
+$env:PROSPECTION_SANS_NAVIGATEUR = "1"
+Start-Process -FilePath (Join-Path $Dossier "Interface.bat") -ArgumentList "-Port $Port" -WorkingDirectory $Dossier
+Write-Host ""
+Write-Host "Termine : l'interface redemarre, la page va se recharger." -ForegroundColor Green
+Start-Sleep -Seconds 4
+'@
 
 function Get-DossierCampagne {
     # Verifie que le nom designe bien un sous-dossier direct de Campagnes\ (pas de ..\ etc.)
@@ -125,7 +174,10 @@ try { $listener.Start() } catch {
 $url = "http://localhost:$Port/"
 Write-Host "Interface de prospection disponible sur $url"
 Write-Host "Laisse cette fenetre ouverte pendant l'utilisation. La fermer arrete l'interface."
-if (-not $SansNavigateur) { Start-Process $url }
+# PROSPECTION_SANS_NAVIGATEUR : redemarrage apres une mise a jour lancee depuis l'interface (la page
+# deja ouverte se recharge seule, inutile d'ouvrir un nouvel onglet)
+if (-not $SansNavigateur -and $env:PROSPECTION_SANS_NAVIGATEUR -ne "1") { Start-Process $url }
+$env:PROSPECTION_SANS_NAVIGATEUR = $null
 
 try {
     while ($listener.IsListening) {
@@ -229,6 +281,22 @@ try {
                     $json = [pscustomobject]@{ DelaiRelanceJours = $delai } | ConvertTo-Json
                     Write-FichierCampagne -Chemin (Join-Path $dossier "parametres.json") -Contenu $json
                     Write-Host "$(Get-Date -Format HH:mm:ss) Delai avant relance : $delai jour(s) - $($corps.campagne)"
+                    Send-Json $ctx 200 @{ ok = $true }
+                    continue
+                }
+
+                if ($chemin -eq "/api/version" -and $req.HttpMethod -eq "GET") {
+                    Send-Json $ctx 200 (Get-InfosVersion)
+                    continue
+                }
+
+                if ($chemin -eq "/api/mettre-a-jour" -and $req.HttpMethod -eq "POST") {
+                    $installeur = Join-Path $racine "Installer ou mettre a jour.bat"
+                    if (-not (Test-Path $installeur)) { Send-Json $ctx 404 @{ erreur = "Installeur introuvable dans le dossier de l'outil : retelecharge Installer.bat." }; continue }
+                    $f = [IO.Path]::Combine($env:TEMP, "prospection-maj-$([guid]::NewGuid().ToString('N').Substring(0, 8)).ps1")
+                    [IO.File]::WriteAllText($f, $scriptMiseAJour, [Text.Encoding]::ASCII)
+                    Write-Host "$(Get-Date -Format HH:mm:ss) Mise a jour demandee depuis l'interface : le serveur va redemarrer."
+                    Start-Process powershell -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$f`" -ServeurPid $PID -Dossier `"$racine`" -Port $Port"
                     Send-Json $ctx 200 @{ ok = $true }
                     continue
                 }

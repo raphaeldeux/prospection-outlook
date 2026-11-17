@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   BookOpenIcon,
+  SettingsIcon,
   InboxIcon,
   ListTodoIcon,
   SearchIcon,
@@ -38,9 +39,11 @@ import { AFaire } from "@/AFaire"
 import { Guide } from "@/Guide"
 import { detailStatut, nomAffiche } from "@/lib/statut"
 import { NouvelleCampagne } from "@/NouvelleCampagne"
+import { Parametres } from "@/Parametres"
 import { dateCourte, lireNomCampagne } from "@/lib/campagne"
 import {
   chargerFichiers,
+  chargerVersion,
   chargerSuivi,
   creerCampagne,
   enregistrerDelai,
@@ -59,6 +62,7 @@ import { StatutBadge, statuts } from "@/StatutBadge"
 const nomsEtapes = ["", "Mail1", "Mail2 · relance 1", "Mail3 · relance 2", "Mail4 · relance 3"]
 const GUIDE = "__guide__"
 const AFAIRE = "__afaire__"
+const PARAMETRES = "__parametres__"
 
 function lireSelection() {
   try {
@@ -109,6 +113,14 @@ export default function App() {
     void actualiser()
   }, [actualiser])
 
+  // Vérifie une fois au démarrage si une mise à jour est disponible (pastille sur « Paramètres »)
+  const [majDispo, setMajDispo] = useState(false)
+  useEffect(() => {
+    chargerVersion()
+      .then((v) => setMajDispo(v.aJour === false))
+      .catch(() => {})
+  }, [])
+
   function choisir(nom: string, filtreInitial: Code | null = null) {
     if (nom === selection && !filtreInitial) return
     if (nom !== selection && modifsEnCours && !window.confirm("Des modifications ne sont pas enregistrées. Les abandonner ?")) return
@@ -126,7 +138,7 @@ export default function App() {
   // les plus récentes en premier (le nom de dossier commence par AAAA-MM)
   const campagnes = [...(suivi?.Campagnes ?? [])].sort((a, b) => b.Nom.localeCompare(a.Nom))
   const campagne: Campagne | undefined =
-    selection === GUIDE || selection === AFAIRE ? undefined : (campagnes.find((c) => c.Nom === selection) ?? campagnes[0])
+    selection === GUIDE || selection === AFAIRE || selection === PARAMETRES ? undefined : (campagnes.find((c) => c.Nom === selection) ?? campagnes[0])
   const totalAFaire = campagnes.reduce(
     (s, c) => s + c.Contacts.filter((x) => ["relance", "afaire", "brouillon"].includes(x.Code)).length,
     0,
@@ -244,12 +256,26 @@ export default function App() {
           >
             <BookOpenIcon /> Guide d'utilisation
           </Button>
+          <Button
+            variant={selection === PARAMETRES ? "secondary" : "ghost"}
+            className="w-full justify-start"
+            onClick={() => choisir(PARAMETRES)}
+          >
+            <SettingsIcon /> Paramètres
+            {majDispo && (
+              <span className="ml-auto rounded-full bg-sky-100 px-1.5 text-xs text-sky-900 dark:bg-sky-950 dark:text-sky-200" title="Une mise à jour est disponible">
+                Mise à jour
+              </span>
+            )}
+          </Button>
         </div>
       </aside>
 
       <main className="flex-1 overflow-y-auto p-6">
         {selection === GUIDE ? (
           <Guide />
+        ) : selection === PARAMETRES ? (
+          <Parametres modifsEnCours={modifsEnCours} />
         ) : selection === AFAIRE && suivi && campagnes.length > 0 ? (
           <AFaire suivi={suivi} campagnes={campagnes} onOuvrir={(nom, f) => choisir(nom, f ?? null)} onActualiser={actualiser} />
         ) : erreur && !suivi ? (

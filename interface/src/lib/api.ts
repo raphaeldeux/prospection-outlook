@@ -130,3 +130,21 @@ export async function enregistrerIssue(campagne: string, email: string, issue: s
 export async function ouvrirReponseOutlook(email: string) {
   return lire<{ ok: boolean }>(await fetch("/api/outlook-reponse", { method: "POST", headers: entetes, body: JSON.stringify({ email }) }))
 }
+
+export type InfosVersion = {
+  installee: { version: string; date: string } | null
+  publiee: { version: string; date: string } | null
+  aJour: boolean | null
+  release: { nom: string; notes: string; url: string; date: string } | null
+  dossier: string
+}
+
+/** Version installée et dernière version publiée (null si GitHub injoignable) */
+export async function chargerVersion(): Promise<InfosVersion> {
+  return lire<InfosVersion>(await fetch("/api/version", { headers: entetes }))
+}
+
+/** Lance la mise à jour : le serveur s'arrête, l'installeur tourne, puis l'interface redémarre */
+export async function lancerMiseAJour() {
+  return lire<{ ok: boolean }>(await fetch("/api/mettre-a-jour", { method: "POST", headers: entetes }))
+}
