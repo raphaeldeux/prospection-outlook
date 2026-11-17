@@ -152,8 +152,12 @@ try {
             foreach ($lnk in @((Join-Path ([Environment]::GetFolderPath("Desktop")) "Prospection Outlook.lnk"),
                                (Join-Path ([Environment]::GetFolderPath("Programs")) "Prospection Outlook.lnk"))) {
                 if (-not (Test-Path $lnk)) { continue }
-                $d = Split-Path -Parent $wsh.CreateShortcut($lnk).TargetPath
-                if (Test-Installation $d) { $detecte = $d; $origine = "raccourci Prospection Outlook"; break }
+                # dossier de travail du raccourci (raccourci sans console : la cible est conhost.exe), sinon dossier de la cible
+                $r = $wsh.CreateShortcut($lnk)
+                foreach ($d in @($r.WorkingDirectory, (Split-Path -Parent $r.TargetPath))) {
+                    if (Test-Installation $d) { $detecte = $d; $origine = "raccourci Prospection Outlook"; break }
+                }
+                if ($detecte) { break }
             }
         } catch {}
     }
@@ -269,10 +273,21 @@ try {
         $bureau = Join-Path ([Environment]::GetFolderPath("Desktop")) "Prospection Outlook.lnk"
         foreach ($lnk in @($bureau, $menu)) {
             $r = $shell.CreateShortcut($lnk)
-            $r.TargetPath = Join-Path $dossier "Interface.bat"
+            # Application sans fenetre noire : conhost --headless lance le lanceur sans console visible
+            # (Interface.bat fait la meme chose, mais une console apparait un instant)
+            $conhost = Join-Path $env:SystemRoot "System32\conhost.exe"
+            $lanceur = Join-Path $dossier "Scripts\Application.ps1"
+            if ((Test-Path $conhost) -and (Test-Path $lanceur)) {
+                $r.TargetPath = $conhost
+                $r.Arguments = "--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$lanceur`""
+            } else {
+                $r.TargetPath = Join-Path $dossier "Interface.bat"
+                $r.Arguments = ""
+            }
             $r.WorkingDirectory = $dossier
-            $r.IconLocation = "$env:SystemRoot\System32\shell32.dll,156"
-            $r.Description = "Interface de prospection Outlook"
+            $icone = Join-Path $dossier "Interface\app\prospection.ico"
+            $r.IconLocation = if (Test-Path $icone) { "$icone,0" } else { "$env:SystemRoot\System32\shell32.dll,156" }
+            $r.Description = "Prospection Outlook"
             $r.Save()
         }
         Ok "Raccourci 'Prospection Outlook' sur le Bureau et dans le menu Demarrer"
@@ -340,7 +355,8 @@ try {
     Write-Host ""
     Write-Host "Installation terminee." -ForegroundColor Green
     Write-Host "Pour demarrer : ouvre Outlook classique, puis double-clique 'Prospection Outlook' sur le Bureau"
-    Write-Host "(ou Interface.bat dans $dossier). Le guide d'utilisation est dans l'interface."
+    Write-Host "(ou Interface.bat dans $dossier). L'application s'ouvre dans sa propre fenetre, avec une icone"
+    Write-Host "pres de l'horloge pour la rouvrir ou la quitter. Le guide d'utilisation est dans l'interface."
     Write-Host "Pour mettre a jour plus tard : 'Installer ou mettre a jour.bat' dans ce meme dossier."
 } catch {
     Write-Host ""

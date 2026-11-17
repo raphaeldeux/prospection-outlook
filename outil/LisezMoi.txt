@@ -1,10 +1,13 @@
 COMMENT UTILISER CE DOSSIER
 ===========================
 
-LE PLUS SIMPLE : double-cliquer "Interface.bat" (Outlook classique ouvert).
-Une interface s'ouvre dans le navigateur : campagnes, suivi, creation des brouillons, et un
-"Guide d'utilisation" complet (bouton en bas a gauche). Contacts et textes des mails se modifient
-directement dans l'interface. Laisser la fenetre noire ouverte pendant l'utilisation.
+LE PLUS SIMPLE : double-cliquer le raccourci "Prospection Outlook" ou "Interface.bat" (Outlook
+classique ouvert). L'application s'ouvre dans sa propre fenetre : campagnes, suivi, creation des
+brouillons, et un "Guide d'utilisation" complet (bouton en bas a gauche). Contacts et textes des
+mails se modifient directement dans l'application. Une icone pres de l'horloge permet de la
+rouvrir ou de la quitter ; fermer la fenetre suffit, l'outil s'arrete seul quelques minutes apres.
+Depannage : "Interface.bat /console" lance l'outil dans une fenetre noire qui montre le journal ;
+sinon le journal est dans Journal\interface.log.
 Les boutons .bat decrits ci-dessous restent utilisables sans l'interface.
 
 METTRE A JOUR : double-cliquer "Installer ou mettre a jour.bat" (connexion Internet requise).

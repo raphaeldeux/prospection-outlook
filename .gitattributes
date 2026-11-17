@@ -4,3 +4,5 @@
 *.txt  text eol=crlf
 *.csv  text eol=crlf
 *.woff2 binary
+*.ico binary
+*.png binary

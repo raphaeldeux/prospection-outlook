@@ -11,3 +11,6 @@ outil/Archives/
 
 # Raccourci local cree par l'installeur (chemin propre au poste)
 Developpement.cmd
+
+# Journal de l'application (mode sans fenetre)
+outil/Journal/

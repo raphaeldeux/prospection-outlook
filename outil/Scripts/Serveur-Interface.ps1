@@ -20,15 +20,26 @@
 # Securite : ecoute uniquement sur localhost, et chaque appel /api doit porter l'en-tete
 # X-Prospection (un site web externe ne peut pas l'ajouter sans autorisation CORS, qu'on ne donne pas).
 #
-# Usage : double-cliquer "Interface.bat" a la racine du dossier Prospection. Fermer la fenetre
-# noire arrete le serveur.
+# Usage : normalement lance sans fenetre par Application.ps1 (raccourci "Prospection Outlook" ou Interface.bat),
+# qui affiche une icone pres de l'horloge. Pour le depannage : "Interface.bat /console" le lance dans une
+# fenetre noire, qui montre le journal en direct ; fermer cette fenetre arrete le serveur.
 
 param(
     [int]$Port = 8765,
-    [switch]$SansNavigateur   # ne pas ouvrir le navigateur au demarrage
+    [switch]$SansNavigateur,      # ne pas ouvrir le navigateur au demarrage
+    [int]$ArretSiInactif = 0,     # minutes sans aucun appel de la page (fenetre fermee) avant arret ; 0 = jamais
+    [string]$Journal              # fichier ou ecrire le journal (mode sans fenetre)
 )
 
 $ErrorActionPreference = "Stop"
+
+if ($Journal) {
+    # Journal du serveur sans fenetre : tout ce qui s'afficherait dans la fenetre noire. Garde petit : au-dela
+    # de 1 Mo, l'ancien journal est renomme en .old.log (un seul ancien journal conserve).
+    New-Item -ItemType Directory -Force (Split-Path $Journal) | Out-Null
+    if ((Test-Path $Journal) -and (Get-Item $Journal).Length -gt 1MB) { Move-Item $Journal ([IO.Path]::ChangeExtension($Journal, ".old.log")) -Force }
+    Start-Transcript -Path $Journal -Append | Out-Null
+}
 
 $racine     = Split-Path -Parent $PSScriptRoot
 $scripts    = $PSScriptRoot
@@ -119,7 +130,14 @@ if (-not $SansInstallation) {
     $env:PROSPECTION_DOSSIER = $null; $env:PROSPECTION_DEV = $null; $env:PROSPECTION_FORCER = $null
 }
 $env:PROSPECTION_SANS_NAVIGATEUR = "1"
-Start-Process -FilePath (Join-Path $Dossier "Interface.bat") -ArgumentList "-Port $Port" -WorkingDirectory $Dossier
+# relance de l'application sans fenetre noire (lanceur via conhost --headless) ; a defaut, Interface.bat
+$lanceur = Join-Path $Dossier "Scripts\Application.ps1"
+$conhost = Join-Path $env:SystemRoot "System32\conhost.exe"
+if ((Test-Path $lanceur) -and (Test-Path $conhost)) {
+    Start-Process -FilePath $conhost -ArgumentList "--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$lanceur`" -Port $Port -SansFenetre" -WorkingDirectory $Dossier
+} else {
+    Start-Process -FilePath (Join-Path $Dossier "Interface.bat") -ArgumentList "-Port $Port" -WorkingDirectory $Dossier
+}
 Write-Host ""
 Write-Host "Termine : l'interface redemarre, la page va se recharger." -ForegroundColor Green
 Start-Sleep -Seconds 4
@@ -216,8 +234,8 @@ try { $listener.Start() } catch {
     throw "Impossible d'ouvrir le port $Port (l'interface est peut-etre deja ouverte dans une autre fenetre)."
 }
 $url = "http://localhost:$Port/"
-Write-Host "Interface de prospection disponible sur $url"
-Write-Host "Laisse cette fenetre ouverte pendant l'utilisation. La fermer arrete l'interface."
+Write-Host "$(Get-Date -Format 'dd/MM/yyyy HH:mm:ss') Interface de prospection disponible sur $url"
+if ($ArretSiInactif -le 0) { Write-Host "Laisse cette fenetre ouverte pendant l'utilisation. La fermer arrete l'interface." }
 # PROSPECTION_SANS_NAVIGATEUR : redemarrage apres une mise a jour lancee depuis l'interface (la page
 # deja ouverte se recharge seule, inutile d'ouvrir un nouvel onglet)
 if (-not $SansNavigateur -and $env:PROSPECTION_SANS_NAVIGATEUR -ne "1") { Start-Process $url }
@@ -236,8 +254,22 @@ function Start-Redemarrage {
 }
 
 try {
+    # Attente des requetes par tranches de 15 s, pour pouvoir s'arreter seul quand la page ne donne plus signe de
+    # vie (fenetre fermee : elle appelle /api/ping toutes les 30 s tant qu'elle est ouverte).
+    $derniereActivite = Get-Date
+    $attente = $null
     while ($listener.IsListening) {
-        $ctx = $listener.GetContext()
+        if (-not $attente) { $attente = $listener.BeginGetContext($null, $null) }
+        if (-not $attente.AsyncWaitHandle.WaitOne(15000)) {
+            if ($ArretSiInactif -gt 0 -and ((Get-Date) - $derniereActivite).TotalMinutes -ge $ArretSiInactif) {
+                Write-Host "$(Get-Date -Format HH:mm:ss) Fenetre fermee depuis $ArretSiInactif min : arret de l'interface."
+                break
+            }
+            continue
+        }
+        $ctx = $listener.EndGetContext($attente)
+        $attente = $null
+        $derniereActivite = Get-Date
         $req = $ctx.Request
         $chemin = $req.Url.AbsolutePath
         try {
@@ -250,6 +282,12 @@ try {
                 }
                 if ($redemarrageLance) {
                     Send-Json $ctx 503 @{ erreur = "L'outil vient d'etre mis a jour : l'interface redemarre."; redemarrage = $true }
+                    continue
+                }
+
+                if ($chemin -eq "/api/ping") {
+                    # signe de vie de la page ouverte (voir l'arret automatique plus haut)
+                    Send-Json $ctx 200 @{ ok = $true }
                     continue
                 }
 
@@ -527,4 +565,5 @@ try {
     }
 } finally {
     $listener.Stop()
+    if ($Journal) { try { Stop-Transcript | Out-Null } catch {} }
 }

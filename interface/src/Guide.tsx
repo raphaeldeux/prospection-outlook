@@ -199,8 +199,10 @@ export function Guide() {
                 Courrier &gt; Signatures, champ « Nouveaux messages ».
               </li>
               <li>
-                L'interface se lance avec le raccourci <strong>Prospection Outlook</strong> (ou <Code>Interface.bat</Code>). Une
-                fenêtre noire s'ouvre : <strong>laisse-la ouverte</strong>, la fermer arrête l'interface.
+                L'outil se lance avec le raccourci <strong>Prospection Outlook</strong> (ou <Code>Interface.bat</Code>). Il
+                s'ouvre dans <strong>sa propre fenêtre</strong>, et une <strong>icône près de l'horloge</strong> permet de le
+                rouvrir ou de le quitter (clic droit). Fermer la fenêtre suffit : l'outil s'arrête seul quelques minutes plus
+                tard.
               </li>
               <li>L'outil est portable : ni droits administrateur, ni installation dans Windows.</li>
             </ul>
@@ -480,8 +482,9 @@ export function Guide() {
                 ["« objet identique à celui du MailN »", "Deux étapes ont le même objet pour ce contact : l'outil ne peut pas savoir laquelle est partie, il ne prépare donc rien. Donne un objet différent à chaque étape (par exemple « Re: » devant)."],
                 ["Un contact n'apparaît pas comme envoyé alors qu'il l'est", "L'objet du mail envoyé doit commencer exactement par l'objet de l'étape, à la même adresse. Vérifie aussi qu'il est dans les Éléments envoyés (pas archivé), et que tu n'as pas modifié le contact après l'envoi."],
                 ["« Plusieurs signatures Outlook existent… »", "Choisis une signature pour les nouveaux messages : Outlook > Fichier > Options > Courrier > Signatures."],
-                ["L'interface ne s'ouvre pas", "Vérifie que la fenêtre noire est ouverte, puis va sur http://localhost:8765. Si le port est occupé, une autre fenêtre de l'interface est déjà ouverte."],
-                ["« Route inconnue » ou message de redémarrage", "L'outil vient d'être mis à jour : ferme la fenêtre noire et relance l'interface (les versions récentes redémarrent seules)."],
+                ["L'interface ne s'ouvre pas", "Clic droit sur l'icône Prospection près de l'horloge (dans la flèche ^ si elle est masquée) : « Ouvrir Prospection ». Sinon « Journal » montre ce qui s'est passé, ou lance « Interface.bat /console » pour voir le journal en direct dans une fenêtre noire."],
+                ["« Prospection Outlook est fermé »", "L'outil a été quitté (icône près de l'horloge) ou s'est arrêté : double-clique le raccourci Prospection Outlook, la page se recharge d'elle-même."],
+                ["« Route inconnue » ou message de redémarrage", "L'outil vient d'être mis à jour : quitte-le (icône près de l'horloge) puis relance-le. Les versions récentes redémarrent seules."],
               ].map(([q, r]) => (
                 <div key={q}>
                   <dt className="font-medium text-foreground">{q}</dt>

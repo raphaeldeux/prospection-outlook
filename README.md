@@ -40,7 +40,7 @@ Prérequis : Windows et **Outlook classique** (pas le « nouvel Outlook »), ave
 1. Télécharge **[Installer.bat](https://github.com/raphaeldeux/prospection-outlook/releases/latest/download/Installer.bat)**.
 2. Double-clique dessus. Si Windows affiche « Windows a protégé votre ordinateur », clique sur *Informations complémentaires* puis *Exécuter quand même*.
 3. Accepte le dossier proposé (`Documents\Prospection`) ou indiques-en un autre. Réponds **N** à la question sur les outils de développement.
-4. Ouvre Outlook, puis double-clique le raccourci **Prospection Outlook** sur le Bureau. L'interface s'ouvre dans ton navigateur : laisse la fenêtre noire ouverte pendant l'utilisation.
+4. Ouvre Outlook, puis double-clique le raccourci **Prospection Outlook** sur le Bureau. L'outil s'ouvre dans **sa propre fenêtre**, sans fenêtre noire. Une **icône près de l'horloge** permet de le rouvrir ou de le quitter. Fermer la fenêtre suffit : l'outil s'arrête seul quelques minutes plus tard.
 5. Clique sur **Guide d'utilisation**, en bas à gauche de l'interface.
 
 L'installeur :
@@ -73,8 +73,10 @@ parametres.json           délai avant relance et objets communs des 4 mails
 ```
 Installer.bat           installeur / mise à jour portable (fichier autonome, publié dans les Releases)
 outil/                  ce que les utilisateurs copient (prêt à l'emploi)
-  Interface.bat         lance l'interface
+  Interface.bat         lance l'application (Interface.bat /console : avec le journal en direct, pour le depannage)
   Scripts/              moteur PowerShell (pilote Outlook en COM)
+    Application.ps1     lanceur sans console : serveur en arriere-plan, icone pres de l'horloge, fenetre Edge
+    Serveur-Interface.ps1  serveur local de l'interface (localhost:8765)
   Interface/app/        interface compilée (versionnée : pas besoin de Node pour l'utiliser)
   Campagnes/_Modele campagne/
 interface/              code source de l'interface (React + Vite + shadcn/ui)

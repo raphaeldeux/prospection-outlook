@@ -41,6 +41,7 @@ import { DerniereActualisation } from "@/DerniereActualisation"
 import { Guide } from "@/Guide"
 import { detailStatut, nomAffiche } from "@/lib/statut"
 import { NouvelleCampagne } from "@/NouvelleCampagne"
+import { SigneDeVie } from "@/SigneDeVie"
 import { Parametres } from "@/Parametres"
 import { dateCourte, lireNomCampagne } from "@/lib/campagne"
 import {
@@ -234,6 +235,7 @@ export default function App() {
 
   return (
     <div className="flex h-svh bg-background text-foreground">
+      <SigneDeVie />
       <aside className="flex w-64 shrink-0 flex-col border-r bg-muted/30">
         <div className="flex items-center gap-2 px-4 py-4">
           <MailPlusIcon className="size-5" />

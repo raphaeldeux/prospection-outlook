@@ -198,3 +198,8 @@ export async function enregistrerObjet(campagne: string, emails: string[], etape
     await fetch("/api/objet", { method: "PUT", headers: entetes, body: JSON.stringify({ campagne, emails, etape, objet, commun }) }),
   )
 }
+
+/** Signe de vie : tant que la page est ouverte, le serveur ne s'arrête pas tout seul (mode application) */
+export async function ping() {
+  return lire<{ ok: boolean }>(await fetch("/api/ping", { headers: entetes }))
+}
