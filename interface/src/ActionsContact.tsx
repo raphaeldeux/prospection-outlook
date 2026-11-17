@@ -11,7 +11,14 @@ import { issues, libelleIssue } from "@/lib/issues"
  *  - renseigner l'issue (RDV obtenu, pas intéressé…) : le contact est alors clos, plus de relance
  *  - rouvrir un contact clos
  */
-export function ActionsContact(props: { campagne: string; contact: Contact; onChange: () => void; compact?: boolean }) {
+export function ActionsContact(props: {
+  campagne: string
+  contact: Contact
+  onChange: () => void
+  /** Met à jour l'affichage tout de suite, sans relire Outlook (l'enregistrement se fait en arrière-plan) */
+  onIssueLocale?: (campagne: string, email: string, issue: string) => void
+  compact?: boolean
+}) {
   const { contact } = props
   const [occupe, setOccupe] = useState<"reponse" | "issue" | null>(null)
 
@@ -27,6 +34,30 @@ export function ActionsContact(props: { campagne: string; contact: Contact; onCh
   }
 
   async function changerIssue(issue: string) {
+    // Clore : affichage immédiat, enregistrement en arrière-plan (inutile de relire Outlook pour ça).
+    // En cas d'échec, on relit le suivi pour revenir à l'état réel.
+    if (issue && props.onIssueLocale) {
+      props.onIssueLocale(props.campagne, contact.Email, issue)
+      toast.success(`${libelleIssue(issue)} : plus aucun mail ne sera préparé pour ce contact`)
+      enregistrerIssue(props.campagne, contact.Email, issue).catch((e) => {
+        toast.error(`Non enregistré : ${(e as Error).message}`)
+        props.onChange()
+      })
+      return
+    }
+    // Rouvrir : statut recalculé tout de suite à partir des données déjà chargées, puis le suivi est relu en
+    // arrière-plan pour confirmer (un brouillon en attente, par exemple, n'est connu que d'Outlook)
+    if (!issue && props.onIssueLocale) {
+      props.onIssueLocale(props.campagne, contact.Email, "")
+      toast.success("Contact rouvert")
+      enregistrerIssue(props.campagne, contact.Email, "")
+        .then(() => props.onChange())
+        .catch((e) => {
+          toast.error(`Non enregistré : ${(e as Error).message}`)
+          props.onChange()
+        })
+      return
+    }
     setOccupe("issue")
     try {
       await enregistrerIssue(props.campagne, contact.Email, issue)

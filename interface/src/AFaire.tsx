@@ -23,6 +23,7 @@ export function AFaire(props: {
   onOuvrir: (campagne: string, filtre?: Code) => void
   onActualiser: () => void
   chargement: boolean
+  onIssueLocale: (campagne: string, email: string, issue: string) => void
 }) {
   const { campagnes } = props
 
@@ -173,7 +174,7 @@ export function AFaire(props: {
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <ActionsContact campagne={campagne.Nom} contact={contact} onChange={props.onActualiser} />
+                  <ActionsContact campagne={campagne.Nom} contact={contact} onChange={props.onActualiser} onIssueLocale={props.onIssueLocale} />
                   <Button size="xs" variant="ghost" onClick={() => props.onOuvrir(campagne.Nom, "repondu")} title="Voir la campagne">
                     <ArrowRightIcon />
                   </Button>

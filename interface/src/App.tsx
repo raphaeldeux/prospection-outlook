@@ -97,6 +97,41 @@ export default function App() {
   }, [modifsEnCours])
   const signalerModif = useCallback((zone: string, m: boolean) => setModifs((x) => (x[zone] === m ? x : { ...x, [zone]: m })), [])
 
+  /** Clôt un contact dans l'affichage, sans relire Outlook (l'enregistrement se fait en arrière-plan) */
+  const majIssueLocale = useCallback((nomCampagne: string, email: string, issue: string) => {
+    const aujourdhui = new Date().toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" })
+    setSuivi((s) =>
+      s && {
+        ...s,
+        Campagnes: s.Campagnes.map((c) =>
+          c.Nom !== nomCampagne
+            ? c
+            : {
+                ...c,
+                Contacts: c.Contacts.map((x) => {
+                  if (x.Email.trim().toLowerCase() !== email.trim().toLowerCase()) return x
+                  if (issue) return { ...x, Code: "clos" as const, Issue: issue, IssueLe: aujourdhui, IssueNote: "" }
+                  // Rouvrir : même logique que Suivi-Campagnes.ps1, à partir des dates déjà connues
+                  const derniere = [1, 2, 3, 4].filter((n) => x[`Mail${n}` as "Mail1"]).pop() ?? 0
+                  const m = x.RelancePossibleLe?.match(/^(\d{2})\/(\d{2})\/(\d{4})/)
+                  const possibleLe = m ? new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1])) : null
+                  const code: Code = x.DateReponse
+                    ? "repondu"
+                    : derniere === 0
+                      ? "afaire"
+                      : derniere + 1 > x.NbEtapes
+                        ? "termine"
+                        : possibleLe && possibleLe.getTime() > Date.now()
+                          ? "attente"
+                          : "relance"
+                  return { ...x, Code: code, Issue: "", IssueLe: "", IssueNote: "" }
+                }),
+              },
+        ),
+      },
+    )
+  }, [])
+
   const actualiser = useCallback(async () => {
     setChargement(true)
     try {
@@ -278,7 +313,7 @@ export default function App() {
         ) : selection === PARAMETRES ? (
           <Parametres modifsEnCours={modifsEnCours} />
         ) : selection === AFAIRE && suivi && campagnes.length > 0 ? (
-          <AFaire suivi={suivi} campagnes={campagnes} onOuvrir={(nom, f) => choisir(nom, f ?? null)} onActualiser={actualiser} chargement={chargement} />
+          <AFaire suivi={suivi} campagnes={campagnes} onOuvrir={(nom, f) => choisir(nom, f ?? null)} onActualiser={actualiser} chargement={chargement} onIssueLocale={majIssueLocale} />
         ) : erreur && !suivi ? (
           <EcranErreur erreur={erreur} onReessayer={actualiser} chargement={chargement} />
         ) : !campagne ? (
@@ -315,6 +350,7 @@ export default function App() {
             setEtapeTexte={setEtapeTexte}
             onModifie={signalerModif}
             modifs={modifs}
+            onIssueLocale={majIssueLocale}
           />
         )}
       </main>
@@ -380,6 +416,7 @@ function VueCampagne(props: {
   setEtapeTexte: (n: number) => void
   onModifie: (zone: string, modifie: boolean) => void
   modifs: Record<string, boolean>
+  onIssueLocale: (campagne: string, email: string, issue: string) => void
 }) {
   const { campagne, suivi, chargement, filtre, setFiltre, enCours, onglet, setOnglet } = props
   const contacts = campagne.Contacts
@@ -645,7 +682,7 @@ function VueCampagne(props: {
                   <div className="flex flex-col items-start gap-1">
                     <StatutBadge code={c.Code} issue={c.Issue} />
                     <span className="text-xs text-muted-foreground">{detailStatut(c)}</span>
-                    <ActionsContact campagne={campagne.Nom} contact={c} onChange={props.onActualiser} />
+                    <ActionsContact campagne={campagne.Nom} contact={c} onChange={props.onActualiser} onIssueLocale={props.onIssueLocale} />
                   </div>
                 </TableCell>
               </TableRow>

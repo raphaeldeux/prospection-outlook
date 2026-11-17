@@ -1,313 +1,448 @@
-import type { ReactNode } from "react"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useEffect, useState, type ReactNode } from "react"
+import { ArrowUpIcon } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { StatutBadge } from "@/StatutBadge"
 
-const sections = [
-  { id: "principe", titre: "Le principe" },
-  { id: "prerequis", titre: "Avant de commencer" },
-  { id: "campagne", titre: "Créer une campagne" },
-  { id: "contacts", titre: "Les contacts" },
-  { id: "textes", titre: "Rédiger les mails" },
-  { id: "generer", titre: "Créer les brouillons" },
-  { id: "statuts", titre: "Lire le suivi" },
-  { id: "faq", titre: "Questions fréquentes" },
+/** Plan du guide : parties et sections (sert au sommaire) */
+const plan = [
+  {
+    partie: "Bien démarrer",
+    sections: [
+      { id: "principe", titre: "Le principe" },
+      { id: "journee", titre: "Ta journée type" },
+      { id: "prerequis", titre: "Prérequis" },
+    ],
+  },
+  {
+    partie: "Préparer une campagne",
+    sections: [
+      { id: "campagne", titre: "Créer une campagne" },
+      { id: "objets", titre: "Les objets des mails" },
+      { id: "contacts", titre: "Ajouter des contacts" },
+      { id: "textes", titre: "Rédiger les mails" },
+      { id: "regles", titre: "Les règles à respecter" },
+    ],
+  },
+  {
+    partie: "Envoyer et suivre",
+    sections: [
+      { id: "afaire", titre: "La page « À faire »" },
+      { id: "brouillons", titre: "Créer et envoyer les brouillons" },
+      { id: "delai", titre: "Choisir quand relancer" },
+      { id: "statuts", titre: "Comprendre les statuts" },
+      { id: "reponses", titre: "Traiter les réponses" },
+    ],
+  },
+  {
+    partie: "Aide",
+    sections: [
+      { id: "maj", titre: "Mettre à jour l'outil" },
+      { id: "faq", titre: "Questions fréquentes" },
+    ],
+  },
 ]
+const toutesSections = plan.flatMap((p) => p.sections)
 
-function Section({ id, titre, children }: { id: string; titre: string; children: ReactNode }) {
+function aller(id: string) {
+  document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })
+}
+
+// Mise en page « lecture continue » : pas de cartes ni d'encadrés arrondis, seulement des titres, des traits fins
+// et un liseré de couleur pour les astuces et mises en garde.
+function Partie({ titre, children }: { titre: string; children: ReactNode }) {
   return (
-    <Card id={id} className="scroll-mt-6">
-      <CardHeader>
-        <CardTitle className="text-base">{titre}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3 leading-relaxed text-muted-foreground [&_strong]:text-foreground">
-        {children}
-      </CardContent>
-    </Card>
+    <div className="pt-6">
+      <h2 className="border-b-2 border-foreground pb-1.5 text-sm font-semibold tracking-wide uppercase">{titre}</h2>
+      <div className="divide-y">{children}</div>
+    </div>
   )
 }
 
-const Code = ({ children }: { children: ReactNode }) => (
-  <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.8rem] text-foreground">{children}</code>
+function Section({ id, titre, children }: { id: string; titre: string; children: ReactNode }) {
+  return (
+    <section id={id} data-section className="scroll-mt-6 py-5">
+      <h3 className="mb-2 text-base font-semibold">{titre}</h3>
+      <div className="space-y-3 leading-relaxed text-muted-foreground [&_strong]:text-foreground">{children}</div>
+    </section>
+  )
+}
+
+const Code = ({ children }: { children: ReactNode }) => <code className="font-mono text-[0.85rem] text-foreground">{children}</code>
+
+const Astuce = ({ children }: { children: ReactNode }) => (
+  <div className="border-l-2 border-sky-500 pl-3 text-sm">
+    <span className="font-medium text-sky-700 dark:text-sky-300">Astuce · </span>
+    {children}
+  </div>
 )
+
+const Attention = ({ children }: { children: ReactNode }) => (
+  <div className="border-l-2 border-amber-500 pl-3 text-sm [&_strong]:text-foreground">{children}</div>
+)
+
+/** Sommaire collant : reste visible au défilement et met en évidence la section lue */
+function Sommaire() {
+  const [active, setActive] = useState(toutesSections[0].id)
+  useEffect(() => {
+    // La zone qui défile est <main> (pas la fenêtre). Section active : la dernière dont le titre a passé
+    // le haut de la zone ; tout en bas de page, la dernière section.
+    const zone = document.querySelector("main")
+    if (!zone) return
+    const calculer = () => {
+      const haut = zone.getBoundingClientRect().top + 120
+      let courante = toutesSections[0].id
+      for (const s of toutesSections) {
+        const el = document.getElementById(s.id)
+        if (el && el.getBoundingClientRect().top <= haut) courante = s.id
+      }
+      if (zone.scrollTop + zone.clientHeight >= zone.scrollHeight - 4) courante = toutesSections[toutesSections.length - 1].id
+      setActive(courante)
+    }
+    calculer()
+    zone.addEventListener("scroll", calculer, { passive: true })
+    return () => zone.removeEventListener("scroll", calculer)
+  }, [])
+
+  return (
+    <nav className="sticky top-0 hidden max-h-[calc(100svh-3rem)] space-y-4 overflow-y-auto text-sm lg:block" aria-label="Sommaire du guide">
+      <p className="font-medium">Sommaire</p>
+      {plan.map((p) => (
+        <div key={p.partie} className="space-y-1">
+          <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">{p.partie}</p>
+          {p.sections.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => aller(s.id)}
+              className={cn(
+                "block w-full border-l-2 py-0.5 pl-3 text-left transition-colors",
+                active === s.id
+                  ? "border-foreground font-medium text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {s.titre}
+            </button>
+          ))}
+        </div>
+      ))}
+      <button onClick={() => aller("haut-du-guide")} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+        <ArrowUpIcon className="size-3.5" /> Haut de page
+      </button>
+    </nav>
+  )
+}
 
 export function Guide() {
   return (
-    <div className="mx-auto max-w-6xl space-y-4">
-      <div>
-        <h1 className="text-xl font-semibold">Guide d'utilisation</h1>
-        <p className="text-sm text-muted-foreground">
-          Tout ce qu'il faut savoir pour mener une campagne de prospection par e-mail, de la liste de contacts aux relances.
-        </p>
-      </div>
-
-      <nav className="flex flex-wrap gap-1.5">
-        {sections.map((s) => (
-          <a key={s.id} href={`#${s.id}`}>
-            <Badge variant="outline" className="cursor-pointer hover:bg-muted">{s.titre}</Badge>
-          </a>
-        ))}
-      </nav>
-
-      <Section id="principe" titre="Le principe">
-        <p>
-          Une campagne envoie jusqu'à <strong>4 mails</strong> à une liste de contacts : un premier mail (Mail1), puis
-          jusqu'à 3 relances (Mail2, Mail3, Mail4). Chaque relance est une vraie <strong>réponse</strong> au mail précédent,
-          dans le même fil de discussion.
-        </p>
-        <p>
-          L'outil crée des <strong>brouillons</strong> dans Outlook, avec ta signature. <strong>Rien n'est jamais envoyé
-          automatiquement</strong> : tu relis chaque brouillon et tu l'envoies toi-même depuis Outlook.
-        </p>
-        <p>
-          Le suivi lit tes Éléments envoyés et ta Boîte de réception pour savoir où en est chaque contact : quels mails
-          sont partis, qui a répondu, et qui peut être relancé.
-        </p>
-      </Section>
-
-      <Section id="prerequis" titre="Avant de commencer">
-        <ul className="list-disc space-y-1.5 pl-5">
-          <li>
-            <strong>Outlook classique ouvert</strong>, pas le « nouvel Outlook ». Si le bouton « Nouvel Outlook » en haut à
-            droite est activé, désactive-le.
-          </li>
-          <li>
-            <strong>Une signature par défaut</strong> pour les nouveaux messages : Outlook &gt; Fichier &gt; Options &gt;
-            Courrier &gt; Signatures, champ « Nouveaux messages ».
-          </li>
-          <li>
-            L'interface se lance en double-cliquant <Code>Interface.bat</Code> à la racine du dossier Prospection. Une
-            fenêtre noire s'ouvre : <strong>laisse-la ouverte</strong> pendant l'utilisation, la fermer arrête l'interface.
-          </li>
-          <li>
-            L'outil est portable : il ne demande ni droits administrateur ni installation dans Windows. Pour le mettre à jour,
-            double-clique <Code>Installer ou mettre a jour.bat</Code> dans ton dossier Prospection. Tes campagnes sont
-            conservées.
-          </li>
-        </ul>
-      </Section>
-
-      <Section id="campagne" titre="Créer une campagne">
-        <ol className="list-decimal space-y-1.5 pl-5">
-          <li>
-            Clique sur <strong>Nouvelle campagne</strong> en bas de la liste : donne un titre (par exemple « Souveraineté du
-            cloud ») et choisis le mois et l'année de lancement.
-          </li>
-          <li>
-            Dans l'onglet <strong>Contacts</strong>, définis les objets des mails puis ajoute tes destinataires, en masse de
-            préférence (« Ajouter en masse »). Enregistre.
-          </li>
-          <li>
-            Dans l'onglet <strong>Textes des mails</strong>, rédige Mail1 à Mail4 en t'aidant de l'aperçu. Tant qu'un texte
-            contient <Code>[A COMPLETER]</Code>, son étape est bloquée. Enregistre chaque texte.
-          </li>
-          <li>
-            Dans l'onglet <strong>Suivi et brouillons</strong>, crée les brouillons du Mail1, puis relis-les et envoie-les depuis
-            Outlook.
-          </li>
-        </ol>
-        <p>
-          Une campagne est simplement un dossier dans <Code>Campagnes\</Code> (bouton « Dossier »). Tout se fait depuis
-          l'interface : inutile d'ouvrir les fichiers à la main.
-        </p>
-      </Section>
-
-      <Section id="contacts" titre="Les contacts">
-        <p>L'onglet <strong>Contacts</strong> d'une campagne contient une ligne par destinataire :</p>
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full text-sm">
-            <tbody className="[&_td]:border-b [&_td]:px-3 [&_td]:py-1.5 [&_tr:last-child_td]:border-0">
-              <tr><td className="text-foreground">Civilité</td><td>Madame, Monsieur</td></tr>
-              <tr><td className="text-foreground">Prénom</td><td>Prénom (variable {"{{PRENOM}}"})</td></tr>
-              <tr><td className="text-foreground">Nom</td><td>Nom de famille</td></tr>
-              <tr><td className="text-foreground">Entreprise</td><td>Nom de l'entreprise</td></tr>
-              <tr><td className="text-foreground">Téléphone</td><td>Facultatif, pour mémoire</td></tr>
-              <tr><td className="text-foreground">E-mail</td><td>Adresse du destinataire (obligatoire, en rouge si invalide ou en double)</td></tr>
-              <tr><td className="text-foreground">Objet Mail1 … Mail4</td><td>L'objet de chacun des 4 mails</td></tr>
-            </tbody>
-          </table>
+    <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-[minmax(0,1fr)_15rem]">
+      <div className="min-w-0 space-y-2">
+        <div id="haut-du-guide" className="scroll-mt-6">
+          <h1 className="text-xl font-semibold">Guide d'utilisation</h1>
+          <p className="text-sm text-muted-foreground">
+            Tout ce qu'il faut savoir pour mener une campagne de prospection par e-mail, de la liste de contacts au rendez-vous.
+          </p>
         </div>
-        <p>
-          <strong>Objets :</strong> en général identiques pour tous. Saisis-les dans le bloc « Objets des mails » : ils
-          s'appliquent directement à tous les contacts. Les variables <Code>{"{{CIVILITE}}"}</Code>, <Code>{"{{PRENOM}}"}</Code>,{" "}
-          <Code>{"{{NOM}}"}</Code> et{" "}
-          <Code>{"{{ENTREPRISE}}"}</Code> sont remplacées pour chaque contact, par exemple{" "}
-          <Code>{"[{{ENTREPRISE}} / Wavestone] Discutons cybersécurité"}</Code>. Un objet vide arrête la séquence à cette étape
-          pour ce contact.
-        </p>
-        <p><strong>Ajouter en masse</strong> (le plus rapide) : clique sur le bouton, colle, vérifie l'aperçu, ajoute. Sont acceptés :</p>
-        <ul className="list-disc space-y-1 pl-5">
-          <li>
-            des lignes copiées depuis <strong>Excel</strong> (ou un CSV), avec ou sans ligne d'en-tête et avec les colonnes
-            dans n'importe quel ordre : les colonnes sont reconnues d'après leur titre ou leur contenu. Une liste en tête de
-            chaque colonne de l'aperçu permet de corriger ;
-          </li>
-          <li>
-            des destinataires copiés depuis <strong>Outlook</strong> (« DUPONT Jean &lt;jean.dupont@acme.fr&gt;; … ») ;
-          </li>
-          <li>une simple <strong>liste d'adresses</strong>.</li>
-        </ul>
-        <p>
-          Prénom, nom et entreprise manquants sont déduits des adresses de type <Code>prenom.nom@entreprise.fr</Code> (case à
-          décocher si besoin). Les adresses déjà présentes et les adresses invalides sont ignorées, et les objets définis plus
-          haut sont appliqués.
-        </p>
-        <p>
-          Dans le tableau, tu peux aussi <strong>coller directement</strong> un bloc copié depuis Excel dans une case : il
-          remplit les cases à partir de celle-ci, comme dans Excel. <strong>Entrée</strong> passe à la ligne suivante (et en
-          crée une au besoin).
-        </p>
-        <p>
-          Tant que des modifications ne sont pas enregistrées, une barre « Modifications non enregistrées » reste affichée en
-          bas de l'écran : clique sur <strong>Enregistrer</strong>.
-        </p>
-        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-          <p className="font-medium">Deux règles importantes une fois la campagne lancée</p>
-          <ul className="mt-1 list-disc space-y-1 pl-5">
-            <li>
-              <strong className="text-inherit">Ne supprime pas et ne réordonne pas</strong> les contacts : ajoute les nouveaux{" "}
-              <strong className="text-inherit">en fin de liste</strong>. L'objet de chaque mail dépend de la position du
-              contact. Pour arrêter les relances d'un contact, vide plutôt ses objets Mail2 à Mail4.
-            </li>
-            <li>
-              Ne modifie ni l'adresse, ni l'objet (ni l'entreprise, le nom ou la civilité s'ils apparaissent dans l'objet) d'un
-              contact qui a déjà reçu un mail : le suivi ne retrouverait plus ce mail et le contact repasserait en « Mail1 à
-              créer ». L'onglet Contacts signale ces modifications en orange et demande confirmation avant d'enregistrer.
-            </li>
-          </ul>
-        </div>
-      </Section>
 
-      <Section id="textes" titre="Rédiger les mails">
-        <p>
-          L'onglet <strong>Textes des mails</strong> affiche l'éditeur à gauche et l'aperçu du mail à droite, avec l'objet,
-          pour le contact de ton choix. Les boutons au-dessus de l'éditeur insèrent les variables, le gras, les puces et les
-          liens. Tu peux aussi écrire la mise en forme directement :
-        </p>
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full text-sm">
-            <tbody className="[&_td]:border-b [&_td]:px-3 [&_td]:py-1.5 [&_tr:last-child_td]:border-0">
-              <tr><td className="font-mono text-foreground">**texte**</td><td><strong>gras</strong></td></tr>
-              <tr><td className="font-mono text-foreground">- texte</td><td>puce (en début de ligne)</td></tr>
-              <tr><td className="font-mono text-foreground">[texte](https://…)</td><td>lien cliquable</td></tr>
-              <tr><td className="font-mono text-foreground">ligne vide</td><td>saut de ligne</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <p>
-          N'ajoute pas ta signature dans le texte : elle est ajoutée automatiquement. Les relances (Mail2 à Mail4) citent
-          automatiquement le mail précédent en dessous.
-        </p>
-      </Section>
-
-      <Section id="generer" titre="Créer les brouillons">
-        <p>
-          Dans une campagne, chaque étape a son bouton <strong>Créer les brouillons</strong>. Le chiffre indique combien de
-          contacts sont concernés. Après création, va dans le dossier <strong>Brouillons</strong> d'Outlook, relis et
-          envoie.
-        </p>
-        <ul className="list-disc space-y-1.5 pl-5">
-          <li><strong>Mail1</strong> : pour tous les contacts qui n'ont encore rien reçu.</li>
-          <li>
-            <strong>Relances</strong> : pour les contacts qui n'ont pas répondu et dont le mail précédent est parti depuis au
-            moins le <strong>délai de la campagne</strong>.
-          </li>
-        </ul>
-        <p>
-          <strong>Choisir quand relancer :</strong> sous le nom de la campagne, règle « Relancer au plus tôt <em>N</em> jour(s)
-          après le mail précédent » puis enregistre. Ce réglage vaut <strong>3 jours</strong> par défaut et est propre à
-          chaque campagne. Mets <strong>0</strong> pour pouvoir relancer à tout moment : c'est alors toi qui décides en
-          cliquant sur « Créer les brouillons ». Tu peux aussi l'abaisser ponctuellement, créer les relances, puis le
-          remonter.
-        </p>
-        <p>Tu peux relancer une étape sans risque : l'outil saute automatiquement</p>
-        <ul className="list-disc space-y-1.5 pl-5">
-          <li>les contacts qui ont déjà un brouillon ou un mail envoyé pour cette étape ;</li>
-          <li>les contacts qui t'ont répondu (il faut alors reprendre la main toi-même) ;</li>
-          <li>les lignes sans adresse e-mail ou sans objet pour l'étape.</li>
-        </ul>
-        <p>Le journal affiché après chaque création indique ce qui a été fait, contact par contact.</p>
-      </Section>
-
-      <Section id="statuts" titre="Lire le suivi">
-        <p>
-          <strong>La page « À faire »</strong> (en haut à gauche) résume toutes tes campagnes : mails à préparer, brouillons à
-          envoyer (avec un bouton qui ouvre directement le dossier Brouillons d'Outlook) et réponses reçues. Commence ta
-          journée par là ; un clic t'amène au bon endroit.
-        </p>
-        <p>
-          <strong>Après une réponse</strong>, ouvre-la dans Outlook (« Lire la réponse »), puis choisis l'issue dans la liste :
-          RDV obtenu, intéressé à suivre, à recontacter plus tard, pas intéressé, mauvais interlocuteur ou traité. Le contact est
-          alors clos. Tu peux aussi clore un contact qui n'a pas répondu par mail (par exemple après un échange téléphonique) :
-          ses relances s'arrêtent.
-        </p>
-        <p>Dans une campagne, chaque contact a un statut :</p>
-        <div className="space-y-2">
-          {([
-            ["relance", "Le délai de la campagne est écoulé depuis le dernier mail : la relance suivante peut être créée."],
-            ["afaire", "Aucun mail envoyé pour l'instant : crée le Mail1."],
-            ["brouillon", "Un brouillon attend dans Outlook : relis-le et envoie-le."],
-            ["attente", "Le dernier mail est plus récent que le délai de la campagne : la date de relance possible est indiquée. Baisse le délai pour relancer plus tôt."],
-            ["repondu", "Le contact a écrit depuis le premier envoi : les relances s'arrêtent. Lis sa réponse (bouton « Lire la réponse ») puis indique l'issue."],
-            ["clos", "Tu as indiqué l'issue (RDV obtenu, pas intéressé…) : plus aucun mail ne lui est préparé. « Rouvrir » annule."],
-            ["termine", "Les 4 mails (ou toutes les étapes prévues) sont partis, sans réponse."],
-          ] as const).map(([code, texte]) => (
-            <div key={code} className="flex items-start gap-3">
-              <StatutBadge code={code} className="mt-0.5 w-32 justify-center" />
-              <span>{texte}</span>
-            </div>
+        {/* Sommaire compact pour les petits écrans (le sommaire latéral n'y est pas affiché) */}
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm lg:hidden">
+          {toutesSections.map((s) => (
+            <button key={s.id} onClick={() => aller(s.id)} className="text-muted-foreground underline-offset-2 hover:underline">
+              {s.titre}
+            </button>
           ))}
         </div>
-        <p>
-          Les dates affichées sont celles d'envoi réel, lues dans Outlook. Le suivi remonte jusqu'à 180 jours en arrière.
-          Clique sur <strong>Actualiser</strong> après avoir envoyé des mails.
-        </p>
-      </Section>
 
-      <Section id="faq" titre="Questions fréquentes">
-        <dl className="space-y-3">
-          <div>
-            <dt className="font-medium text-foreground">« Outlook (classique) ne semble pas ouvert »</dt>
-            <dd>Ouvre Outlook classique (pas le nouvel Outlook), attends qu'il soit chargé, puis réessaie.</dd>
-          </div>
-          <div>
-            <dt className="font-medium text-foreground">Un contact a répondu par un message d'absence</dt>
-            <dd>
-              L'outil considère tout mail reçu du contact comme une réponse et arrête ses relances. Si c'était seulement
-              une absence, relance-le à la main depuis Outlook.
-            </dd>
-          </div>
-          <div>
-            <dt className="font-medium text-foreground">« Plusieurs signatures Outlook existent… »</dt>
-            <dd>
-              Choisis une signature pour les nouveaux messages dans Outlook (Fichier &gt; Options &gt; Courrier &gt;
-              Signatures).
-            </dd>
-          </div>
-          <div>
-            <dt className="font-medium text-foreground">Les accents sont cassés dans les objets</dt>
-            <dd>
-              Le fichier des contacts a été modifié hors de l'interface sans le format UTF-8. Corrige les objets dans l'onglet
-              Contacts et enregistre : l'interface enregistre toujours au bon format.
-            </dd>
-          </div>
-          <div>
-            <dt className="font-medium text-foreground">Un contact n'apparaît pas comme envoyé alors qu'il l'est</dt>
-            <dd>
-              L'objet du mail envoyé doit commencer exactement par la colonne <Code>SujetN</Code> du fichier, et l'adresse
-              doit être identique. Vérifie aussi que le mail est dans les Éléments envoyés (et pas archivé).
-            </dd>
-          </div>
-          <div>
-            <dt className="font-medium text-foreground">L'interface ne s'ouvre pas</dt>
-            <dd>
-              Vérifie que la fenêtre noire d'<Code>Interface.bat</Code> est toujours ouverte, puis va sur{" "}
-              <Code>http://localhost:8765</Code>. Si elle indique que le port est occupé, une autre fenêtre de l'interface
-              est déjà ouverte.
-            </dd>
-          </div>
-        </dl>
-      </Section>
+        <Partie titre="Bien démarrer">
+          <Section id="principe" titre="Le principe">
+            <p>
+              Une campagne envoie jusqu'à <strong>4 mails</strong> à une liste de contacts : un premier mail (Mail1), puis
+              jusqu'à 3 relances (Mail2, Mail3, Mail4). Chaque relance est une vraie <strong>réponse</strong> au mail précédent,
+              dans le même fil de discussion.
+            </p>
+            <p>
+              L'outil crée des <strong>brouillons</strong> dans Outlook, avec ta signature. <strong>Rien n'est jamais envoyé
+              automatiquement</strong> : tu relis chaque brouillon et tu l'envoies toi-même depuis Outlook.
+            </p>
+            <p>
+              Le suivi lit tes Éléments envoyés et ta Boîte de réception pour savoir où en est chaque contact : mails partis,
+              réponses reçues, relances possibles.
+            </p>
+          </Section>
+
+          <Section id="journee" titre="Ta journée type">
+            <ol className="list-decimal space-y-1.5 pl-5">
+              <li>Ouvre Outlook, puis l'interface (raccourci « Prospection Outlook »).</li>
+              <li>
+                Va sur <strong>À faire</strong> : tout ce qui t'attend, toutes campagnes confondues.
+              </li>
+              <li>
+                <strong>Prépare</strong> les mails et relances proposés (« Préparer » puis « Créer les brouillons »).
+              </li>
+              <li>
+                Clique sur <strong>Ouvrir les brouillons dans Outlook</strong>, relis et envoie.
+              </li>
+              <li>
+                <strong>Traite les réponses</strong> : lis-les, réponds depuis Outlook, puis indique l'issue (RDV obtenu…).
+              </li>
+            </ol>
+          </Section>
+
+          <Section id="prerequis" titre="Prérequis">
+            <ul className="list-disc space-y-1.5 pl-5">
+              <li>
+                <strong>Outlook classique ouvert</strong>, pas le « nouvel Outlook ». Si le bouton « Nouvel Outlook » en haut à
+                droite est activé, désactive-le.
+              </li>
+              <li>
+                <strong>Une signature par défaut</strong> pour les nouveaux messages : Outlook &gt; Fichier &gt; Options &gt;
+                Courrier &gt; Signatures, champ « Nouveaux messages ».
+              </li>
+              <li>
+                L'interface se lance avec le raccourci <strong>Prospection Outlook</strong> (ou <Code>Interface.bat</Code>). Une
+                fenêtre noire s'ouvre : <strong>laisse-la ouverte</strong>, la fermer arrête l'interface.
+              </li>
+              <li>L'outil est portable : ni droits administrateur, ni installation dans Windows.</li>
+            </ul>
+          </Section>
+        </Partie>
+
+        <Partie titre="Préparer une campagne">
+          <Section id="campagne" titre="Créer une campagne">
+            <ol className="list-decimal space-y-1.5 pl-5">
+              <li>
+                Clique sur <strong>Nouvelle campagne</strong> en bas à gauche : donne un titre (par exemple « Souveraineté du
+                cloud ») et choisis le mois et l'année de lancement.
+              </li>
+              <li>Onglet <strong>Contacts</strong> : renseigne les objets des mails, puis ajoute tes destinataires.</li>
+              <li>Onglet <strong>Textes des mails</strong> : rédige Mail1 à Mail4.</li>
+              <li>Onglet <strong>Suivi et brouillons</strong> : crée les brouillons du Mail1.</li>
+            </ol>
+            <p>
+              Tout se fait depuis l'interface. Une campagne est un dossier de <Code>Campagnes\</Code> (bouton « Dossier ») : inutile
+              d'ouvrir les fichiers à la main.
+            </p>
+          </Section>
+
+          <Section id="objets" titre="Les objets des mails">
+            <p>
+              Dans l'onglet Contacts, le bloc <strong>Objets des mails</strong> définit l'objet de chaque étape. Il s'applique
+              directement à tous les contacts.
+            </p>
+            <p>
+              Les variables <Code>{"{{CIVILITE}}"}</Code>, <Code>{"{{PRENOM}}"}</Code>, <Code>{"{{NOM}}"}</Code> et{" "}
+              <Code>{"{{ENTREPRISE}}"}</Code> sont remplacées pour chaque contact, par exemple{" "}
+              <Code>{"[{{ENTREPRISE}} / Wavestone] Discutons cybersécurité"}</Code>.
+            </p>
+            <ul className="list-disc space-y-1 pl-5">
+              <li>
+                <strong>Un objet vide</strong> arrête la séquence à cette étape (par exemple : pas de Mail4).
+              </li>
+              <li>
+                <strong>Chaque étape doit avoir un objet différent</strong>, par exemple en ajoutant « Re: » devant : l'outil
+                reconnaît une étape à son objet. Une alerte rouge signale les objets identiques.
+              </li>
+            </ul>
+          </Section>
+
+          <Section id="contacts" titre="Ajouter des contacts">
+            <p>
+              <strong>Ajouter en masse</strong> (le plus rapide) : clique sur le bouton, colle, vérifie l'aperçu, ajoute. Sont
+              acceptés :
+            </p>
+            <ul className="list-disc space-y-1 pl-5">
+              <li>
+                des lignes copiées depuis <strong>Excel</strong> (ou un CSV), avec ou sans en-têtes, colonnes dans n'importe
+                quel ordre. Une liste en tête de chaque colonne de l'aperçu permet de corriger ;
+              </li>
+              <li>des destinataires copiés depuis <strong>Outlook</strong> (« DUPONT Jean &lt;jean.dupont@acme.fr&gt;; … ») ;</li>
+              <li>une simple <strong>liste d'adresses</strong>.</li>
+            </ul>
+            <p>
+              Prénom, nom et entreprise manquants sont déduits des adresses de type <Code>prenom.nom@entreprise.fr</Code>. Les
+              adresses déjà présentes et invalides sont ignorées.
+            </p>
+            <Astuce>
+              Dans le tableau, colle un bloc copié depuis Excel directement dans une case : il remplit les cases suivantes comme
+              dans Excel. <strong>Entrée</strong> passe à la ligne suivante.
+            </Astuce>
+            <div className="overflow-x-auto border-y">
+              <table className="w-full text-sm">
+                <tbody className="[&_td]:border-b [&_td]:px-3 [&_td]:py-1.5 [&_tr:last-child_td]:border-0">
+                  <tr><td className="text-foreground">Civilité, Prénom, Nom</td><td>Utilisés dans les variables des objets et des textes</td></tr>
+                  <tr><td className="text-foreground">Entreprise</td><td>Variable {"{{ENTREPRISE}}"}</td></tr>
+                  <tr><td className="text-foreground">Téléphone</td><td>Facultatif, pour mémoire</td></tr>
+                  <tr><td className="text-foreground">E-mail</td><td>Obligatoire ; en rouge si invalide ou en double</td></tr>
+                  <tr><td className="text-foreground">Objet Mail1 … Mail4</td><td>Rempli par le bloc « Objets des mails »</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p>
+              Tant que des modifications ne sont pas enregistrées, une barre reste affichée en bas de l'écran (et une pastille
+              orange sur l'onglet) : clique sur <strong>Enregistrer</strong>.
+            </p>
+          </Section>
+
+          <Section id="textes" titre="Rédiger les mails">
+            <p>
+              L'onglet <strong>Textes des mails</strong> affiche l'éditeur à gauche et l'<strong>aperçu</strong> à droite (objet
+              compris), pour le contact de ton choix. Les boutons insèrent les variables, le gras, les puces et les liens.
+            </p>
+            <div className="overflow-x-auto border-y">
+              <table className="w-full text-sm">
+                <tbody className="[&_td]:border-b [&_td]:px-3 [&_td]:py-1.5 [&_tr:last-child_td]:border-0">
+                  <tr><td className="font-mono text-foreground">**texte**</td><td><strong>gras</strong></td></tr>
+                  <tr><td className="font-mono text-foreground">- texte</td><td>puce (en début de ligne)</td></tr>
+                  <tr><td className="font-mono text-foreground">[texte](https://…)</td><td>lien cliquable</td></tr>
+                  <tr><td className="font-mono text-foreground">ligne vide</td><td>saut de ligne</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <ul className="list-disc space-y-1 pl-5">
+              <li>Ta signature est ajoutée automatiquement : ne la recopie pas.</li>
+              <li>Les relances citent automatiquement le mail précédent en dessous.</li>
+              <li>
+                Tant qu'un texte contient <Code>[A COMPLETER]</Code>, son étape est bloquée.
+              </li>
+            </ul>
+          </Section>
+
+          <Section id="regles" titre="Les règles à respecter">
+            <Attention>
+              <p className="font-medium text-amber-700 dark:text-amber-300">Une fois la campagne lancée</p>
+              <ul className="mt-1 list-disc space-y-1 pl-5">
+                <li>
+                  <strong>Ne supprime pas et ne réordonne pas</strong> les contacts : ajoute les nouveaux{" "}
+                  <strong>en fin de liste</strong>. Pour arrêter les relances d'un contact, clos-le plutôt (voir « Traiter les
+                  réponses »).
+                </li>
+                <li>
+                  Ne modifie ni l'adresse, ni l'objet (ni le nom ou l'entreprise s'ils apparaissent dans l'objet) d'un contact qui
+                  a déjà reçu un mail : le suivi ne retrouverait plus ce mail. L'interface signale ces modifications en orange
+                  et demande confirmation.
+                </li>
+                <li>Ne modifie pas l'objet d'une étape déjà envoyée.</li>
+              </ul>
+            </Attention>
+          </Section>
+        </Partie>
+
+        <Partie titre="Envoyer et suivre">
+          <Section id="afaire" titre="La page « À faire »">
+            <p>
+              C'est la page d'accueil. Elle résume toutes tes campagnes : <strong>mails à préparer</strong>,{" "}
+              <strong>brouillons à envoyer</strong>, <strong>réponses à traiter</strong> et nombre de <strong>RDV obtenus</strong>.
+              Un clic sur « Préparer » ouvre la bonne campagne, déjà filtrée.
+            </p>
+            <p>
+              L'heure de la dernière lecture d'Outlook est affichée à côté de <strong>Actualiser</strong> ; elle passe en orange
+              au-delà de 4 heures. Actualise après avoir envoyé des mails.
+            </p>
+          </Section>
+
+          <Section id="brouillons" titre="Créer et envoyer les brouillons">
+            <p>
+              Dans l'onglet <strong>Suivi et brouillons</strong>, chaque étape a son bouton <strong>Créer les brouillons</strong>.
+              La carte indique combien de contacts sont prêts ; si personne ne l'est, la confirmation explique pourquoi.
+            </p>
+            <ul className="list-disc space-y-1.5 pl-5">
+              <li><strong>Mail1</strong> : pour les contacts qui n'ont encore rien reçu.</li>
+              <li>
+                <strong>Relances</strong> : pour ceux qui n'ont pas répondu et dont le mail précédent date d'au moins le délai de
+                la campagne.
+              </li>
+            </ul>
+            <p>
+              Ensuite, <strong>Ouvrir les brouillons dans Outlook</strong> affiche le dossier Brouillons : relis et envoie.
+            </p>
+            <Astuce>
+              Tu peux relancer une étape sans risque : les contacts qui ont déjà un brouillon ou un mail pour cette étape, ceux
+              qui ont répondu ou qui sont clos, et les lignes incomplètes sont sautés. Le journal détaille ce qui a été fait.
+            </Astuce>
+          </Section>
+
+          <Section id="delai" titre="Choisir quand relancer">
+            <p>
+              Sous le nom de la campagne : « Relancer au plus tôt <em>N</em> jour(s) après le mail précédent ». Le délai vaut{" "}
+              <strong>3 jours</strong> par défaut et est propre à chaque campagne.
+            </p>
+            <p>
+              Mets <strong>0</strong> pour pouvoir relancer à tout moment : c'est alors toi qui décides en cliquant sur « Créer
+              les brouillons ».
+            </p>
+          </Section>
+
+          <Section id="statuts" titre="Comprendre les statuts">
+            <div className="space-y-2">
+              {([
+                ["afaire", "Aucun mail envoyé pour l'instant : crée le Mail1."],
+                ["brouillon", "Un brouillon attend dans Outlook : relis-le et envoie-le."],
+                ["attente", "Le dernier mail est trop récent : la date de relance possible est indiquée."],
+                ["relance", "Le délai est écoulé : la relance suivante peut être créée."],
+                ["repondu", "Le contact a écrit : ses relances s'arrêtent. Lis sa réponse puis indique l'issue."],
+                ["clos", "L'issue est indiquée (RDV obtenu, pas intéressé…) : plus aucun mail ne lui est préparé."],
+                ["termine", "Toutes les étapes prévues sont parties, sans réponse."],
+              ] as const).map(([code, texte]) => (
+                <div key={code} className="flex items-start gap-3">
+                  <StatutBadge code={code} className="mt-0.5 w-36 justify-center" />
+                  <span>{texte}</span>
+                </div>
+              ))}
+            </div>
+            <p>Les dates sont celles d'envoi réel, lues dans Outlook (jusqu'à 180 jours en arrière).</p>
+          </Section>
+
+          <Section id="reponses" titre="Traiter les réponses">
+            <ol className="list-decimal space-y-1.5 pl-5">
+              <li>
+                <strong>Lire la réponse</strong> ouvre le mail du contact dans Outlook. Réponds-lui depuis Outlook.
+              </li>
+              <li>
+                Choisis l'<strong>issue</strong> : RDV obtenu, intéressé à suivre, à recontacter plus tard, pas intéressé,
+                mauvais interlocuteur ou traité.
+              </li>
+            </ol>
+            <p>
+              Le contact est alors <strong>clos</strong> : plus aucun mail ne lui est préparé, et il quitte la liste des réponses à
+              traiter. <strong>Rouvrir</strong> annule.
+            </p>
+            <Astuce>
+              Tu peux aussi clore un contact qui n'a pas répondu par mail (après un appel, un salon…) avec la liste « Clore… » :
+              ses relances s'arrêtent.
+            </Astuce>
+          </Section>
+        </Partie>
+
+        <Partie titre="Aide">
+          <Section id="maj" titre="Mettre à jour l'outil">
+            <p>
+              Va dans <strong>Paramètres</strong> (en bas à gauche) : version installée, nouveautés, et bouton{" "}
+              <strong>Mettre à jour</strong>. La mise à jour prend une quinzaine de secondes, ne touche jamais à tes campagnes, et
+              l'interface redémarre seule. Une pastille signale quand une nouvelle version est disponible.
+            </p>
+          </Section>
+
+          <Section id="faq" titre="Questions fréquentes">
+            <dl className="space-y-3">
+              {[
+                ["« Outlook (classique) ne semble pas ouvert »", "Ouvre Outlook classique (pas le nouvel Outlook), attends qu'il soit chargé, puis réessaie."],
+                ["Un contact a répondu par un message d'absence", "Tout mail reçu du contact arrête ses relances. Si ce n'était qu'une absence, relance-le à la main depuis Outlook."],
+                ["« Mail2 déjà envoyé » alors que ce n'est pas le cas", "L'objet du Mail2 est probablement identique à celui du Mail1. Donne-lui un objet différent (par exemple « Re: » devant)."],
+                ["Un contact n'apparaît pas comme envoyé alors qu'il l'est", "L'objet du mail envoyé doit commencer exactement par l'objet de l'étape, à la même adresse. Vérifie aussi qu'il est dans les Éléments envoyés (pas archivé), et que tu n'as pas modifié le contact après l'envoi."],
+                ["« Plusieurs signatures Outlook existent… »", "Choisis une signature pour les nouveaux messages : Outlook > Fichier > Options > Courrier > Signatures."],
+                ["L'interface ne s'ouvre pas", "Vérifie que la fenêtre noire est ouverte, puis va sur http://localhost:8765. Si le port est occupé, une autre fenêtre de l'interface est déjà ouverte."],
+                ["« Route inconnue » ou message de redémarrage", "L'outil vient d'être mis à jour : ferme la fenêtre noire et relance l'interface (les versions récentes redémarrent seules)."],
+              ].map(([q, r]) => (
+                <div key={q}>
+                  <dt className="font-medium text-foreground">{q}</dt>
+                  <dd>{r}</dd>
+                </div>
+              ))}
+            </dl>
+          </Section>
+        </Partie>
+      </div>
+
+      <Sommaire />
     </div>
   )
 }
