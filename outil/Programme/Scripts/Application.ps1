@@ -14,9 +14,10 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$racine = Split-Path -Parent $PSScriptRoot
+$programme = Split-Path -Parent $PSScriptRoot           # <dossier Prospection>\Programme
+$racine = Split-Path -Parent $programme                 # <dossier Prospection>
 $url = "http://localhost:$Port/"
-$journal = Join-Path $racine "Journal\interface.log"
+$journal = Join-Path $programme "Journal\interface.log"
 $minutesAvantArret = 5
 $sansFenetre = $SansFenetre -or $env:PROSPECTION_SANS_NAVIGATEUR -eq "1"
 $env:PROSPECTION_SANS_NAVIGATEUR = $null
@@ -34,6 +35,17 @@ function Open-Fenetre {
         Where-Object { Test-Path $_ } | Select-Object -First 1
     if ($edge) { Start-Process $edge -ArgumentList "--app=$url", "--window-size=1400,900" }
     else { Start-Process $url }
+}
+
+function Update-RaccourciDossier {
+    # Raccourci "Prospection Outlook" a la racine du dossier : recree s'il manque ou s'il pointe ailleurs (dossier
+    # deplace ou copie). Sans importance s'il echoue : l'application est deja lancee.
+    try {
+        $lien = Join-Path $racine "Prospection Outlook.lnk"
+        $ok = $false
+        if (Test-Path $lien) { $ok = (New-Object -ComObject WScript.Shell).CreateShortcut($lien).Arguments -like "*$PSScriptRoot\Application.ps1*" }
+        if (-not $ok) { & (Join-Path $PSScriptRoot "Raccourci.ps1") -Lien $lien -Dossier $racine }
+    } catch {}
 }
 
 function Show-Erreur([string]$Message) {
@@ -83,9 +95,10 @@ try {
         exit 1
     }
     if (-not $sansFenetre) { Open-Fenetre }
+    Update-RaccourciDossier
 
     # ---------- Icone pres de l'horloge ----------
-    $fichierIcone = Join-Path $racine "Interface\app\prospection.ico"
+    $fichierIcone = Join-Path $programme "Interface\app\prospection.ico"
     $script:icone = New-Object System.Windows.Forms.NotifyIcon
     $script:icone.Icon = if (Test-Path $fichierIcone) { New-Object System.Drawing.Icon($fichierIcone, 16, 16) } else { [System.Drawing.SystemIcons]::Application }
     $script:icone.Text = "Prospection Outlook"

@@ -1,96 +1,48 @@
-COMMENT UTILISER CE DOSSIER
-===========================
+PROSPECTION OUTLOOK
+===================
 
-LE PLUS SIMPLE : double-cliquer le raccourci "Prospection Outlook" ou "Interface.bat" (Outlook
-classique ouvert). L'application s'ouvre dans sa propre fenetre : campagnes, suivi, creation des
-brouillons, et un "Guide d'utilisation" complet (bouton en bas a gauche). Contacts et textes des
-mails se modifient directement dans l'application. Une icone pres de l'horloge permet de la
-rouvrir ou de la quitter ; fermer la fenetre suffit, l'outil s'arrete seul quelques minutes apres.
-Depannage : "Interface.bat /console" lance l'outil dans une fenetre noire qui montre le journal ;
-sinon le journal est dans Journal\interface.log.
-Les boutons .bat decrits ci-dessous restent utilisables sans l'interface.
+POUR COMMENCER : ouvre Outlook classique, puis double-clique "Prospection Outlook" (l'icone
+enveloppe, dans ce dossier ou sur le Bureau). C'est tout.
 
-METTRE A JOUR : double-cliquer "Installer ou mettre a jour.bat" (connexion Internet requise).
+L'application s'ouvre dans sa propre fenetre : campagnes, contacts, objets et textes des mails,
+suivi, creation des brouillons dans Outlook, et un "Guide d'utilisation" complet (en bas a gauche).
+Rien n'est JAMAIS envoye automatiquement : tu relis et tu envoies toi-meme depuis Outlook.
+
+Une icone pres de l'horloge permet de rouvrir ou de quitter l'application. Fermer la fenetre suffit :
+l'outil s'arrete seul quelques minutes plus tard.
+
+METTRE A JOUR : dans l'application, Parametres > Mettre a jour (connexion Internet requise).
 Les campagnes ne sont jamais modifiees par la mise a jour.
 
-Chaque campagne a son propre dossier dans Campagnes\, avec ses contacts, ses textes et ses
-boutons. Le code (dossier Scripts\) est partage : il n'y en a qu'une seule copie, commune a
-toutes les campagnes.
 
-Campagnes\
-   2026-09 Cybersecurite x IA\    <- une campagne
-   _Modele campagne\              <- a copier pour en demarrer une nouvelle
+CE QU'IL Y A DANS CE DOSSIER
+----------------------------
+   Prospection Outlook    le raccourci a double-cliquer pour lancer l'application
+   Campagnes\             tes campagnes : un dossier par campagne (contacts, textes, suivi)
+   LisezMoi.txt           ce fichier
+   Programme\             l'outil lui-meme : rien a ouvrir ni a modifier ici
 
-
-DEMARRER UNE NOUVELLE CAMPAGNE
-------------------------------
-1. Copier-coller le dossier "_Modele campagne" dans Campagnes\, puis le renommer
-   (ex: "2026-11 Souverainete du cloud").
-2. Ouvrir son contacts.csv et saisir les destinataires.
-3. Ouvrir ses Textes\Mail1.txt a Mail4.txt et rediger les 4 mails.
-   Tant qu'un texte contient encore le marqueur [A COMPLETER], le script refuse de le generer.
+Si le raccourci "Prospection Outlook" a disparu (dossier deplace ou copie) : lance une fois
+Programme\Interface.bat, le raccourci est recree.
 
 
-UTILISER UNE CAMPAGNE
----------------------
-Dans le dossier de la campagne, double-cliquer DANS L'ORDRE :
-   "1 - Mail1.bat"              -> cree les brouillons du 1er mail dans Outlook
-   "2 - Mail2 (relance 1).bat"  -> a lancer quelques jours plus tard
-   "3 - Mail3 (relance 2).bat"
-   "4 - Mail4 (relance 3).bat"
-
-Une fenetre noire s'ouvre et liste ce qui a ete fait contact par contact. Les brouillons
-apparaissent dans le dossier Brouillons d'Outlook. Rien n'est JAMAIS envoye automatiquement :
-tu relis et tu envoies toi-meme.
-
-Prerequis : Outlook CLASSIQUE doit etre ouvert (pas le "nouveau Outlook"), sinon le script
-s'arrete avec un message explicite.
+EN CAS DE PROBLEME
+------------------
+   - Journal de l'application : clic droit sur l'icone pres de l'horloge > Journal
+     (fichier Programme\Journal\interface.log).
+   - "Programme\Interface.bat /console" lance l'application dans une fenetre noire qui montre le
+     journal en direct.
+   - "Programme\Suivi des campagnes.bat" affiche le suivi de toutes les campagnes sans l'interface
+     (lecture seule).
+   - Outlook CLASSIQUE doit etre ouvert (pas le "nouvel Outlook").
 
 
-LE FICHIER contacts.csv
------------------------
-Colonnes : Civilite ; Nom ; Entreprise ; Telephone ; Email ; Sujet1 ; Sujet2 ; Sujet3 ; Sujet4
-   - Sujet1 a Sujet4 = l'objet de chacun des 4 mails (un objet different par etape).
-   - Les variables {{CIVILITE}}, {{NOM}} et {{ENTREPRISE}} fonctionnent dans l'objet ET dans
-     le corps du mail. Exemple d'objet :
-        [{{ENTREPRISE}}] Discutons cybersecurite x IA
-
-ATTENTION ENCODAGE : le fichier est en UTF-8 avec BOM pour qu'Excel affiche et re-enregistre
-correctement les accents. Si tu le recrees a la main, garde ce format (Excel : "CSV UTF-8"),
-sinon les accents seront casses dans les objets de mail.
-
-
-MISE EN FORME DES TEXTES (Textes\Mail1.txt ...)
------------------------------------------------
-   **texte**            -> gras
-   une ligne "- ..."    -> puce
-   [texte](lien)        -> lien cliquable
-   une ligne vide       -> un saut de ligne dans le mail
-La signature Outlook est ajoutee automatiquement, ne pas la recopier dans le texte.
-
-
-SAVOIR OU J'EN SUIS
--------------------
-Double-cliquer "Suivi des campagnes.bat" (a la racine du dossier Prospection), Outlook classique
-ouvert. Pour chaque contact de chaque campagne (sauf _Modele campagne) :
-   - date d'envoi de Mail1, Mail2, Mail3, Mail4 (lues dans les Elements envoyes d'Outlook)
-   - prochaine action : relance possible, brouillon a envoyer, relance possible le..., a repondu
-     (a reprendre a la main), sequence terminee
-Le delai minimal avant relance se regle par campagne dans l'interface (3 jours par defaut, 0 = a
-tout moment). Il est enregistre dans le fichier parametres.json du dossier de la campagne.
-Le resume s'affiche dans la fenetre noire et un rapport plus lisible s'ouvre dans le navigateur.
-Lecture seule : rien n'est cree ni envoye.
-
-
-GARDE-FOUS AUTOMATIQUES
------------------------
-   - Un contact deja traite a cette etape (brouillon existant ou mail deja envoye) est saute.
-   - Un contact qui a repondu manuellement est retire des relances suivantes.
-   - Une etape dont la colonne Sujet est vide est ignoree (aucun brouillon cree).
-   - Un texte contenant [A COMPLETER] bloque la generation.
-
-
-AUTRES DOSSIERS
----------------
-   Scripts\    la mecanique technique (PowerShell), commune a toutes les campagnes.
-   Archives\   anciens fichiers et campagnes terminees, sans effet sur les campagnes en cours.
+UNE CAMPAGNE, CE SONT CES FICHIERS (Campagnes\<nom de la campagne>\)
+--------------------------------------------------------------------
+   contacts.csv                  contacts et objets des 4 mails (colonnes Sujet1 a Sujet4)
+   Textes\Mail1.txt ... Mail4    textes communs des 4 mails
+   Textes\personnalises.json     textes propres a certains contacts
+   issues.json                   contacts clos (RDV obtenu, pas interesse...)
+   parametres.json               delai avant relance et objets communs
+Tout se modifie dans l'application : inutile d'ouvrir ces fichiers. Si tu ouvres contacts.csv dans
+Excel, garde le format "CSV UTF-8" a l'enregistrement, sinon les accents seront casses.

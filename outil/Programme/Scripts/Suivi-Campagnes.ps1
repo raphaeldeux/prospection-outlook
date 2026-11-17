@@ -37,7 +37,7 @@ param(
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "Commun.ps1")
 
-$racine = Split-Path -Parent $PSScriptRoot
+$racine = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)   # <dossier Prospection>\Programme\Scripts -> <dossier Prospection>
 if ($Campagne) {
     if (-not (Test-Path $Campagne)) { throw "Dossier de campagne introuvable : $Campagne" }
     $dossiers = @(Get-Item $Campagne)

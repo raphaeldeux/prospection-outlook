@@ -32,6 +32,7 @@ $branche   = "main"
 #   PROSPECTION_SOURCE         dossier du code source (defaut : %LOCALAPPDATA%\prospection-outlook)
 #   PROSPECTION_SANS_AUTOMAJ   1 : ne pas telecharger la derniere version de l'installeur
 #   PROSPECTION_FORCER         1 : reinstaller meme si la version installee est deja la derniere
+#   PROSPECTION_ARCHIVE        archive .zip locale du depot a installer a la place de la release (tests)
 $parDefaut = Join-Path ([Environment]::GetFolderPath("MyDocuments")) "Prospection"
 
 function Etape { param([string]$t) Write-Host ""; Write-Host "== $t" -ForegroundColor Cyan }
@@ -102,11 +103,11 @@ if ($env:PROSPECTION_SANS_AUTOMAJ -ne "1") {
 }
 
 function Update-InstalleurLocal {
-    # Depose la derniere version de l'installeur dans le dossier installe ("Installer ou mettre a jour.bat")
+    # Depose la derniere version de l'installeur dans le dossier installe ("Programme\Installer ou mettre a jour.bat")
     param([string]$Dossier, [string]$Source)
     if (-not $Source -or -not (Test-Path $Source)) { $Source = $env:PROSPECTION_INSTALLEUR_RECENT }
     if (-not $Source -or -not (Test-Path $Source)) { $Source = $env:INSTALLEUR }
-    $cible = Join-Path $Dossier "Installer ou mettre a jour.bat"
+    $cible = Join-Path $Dossier "Programme\Installer ou mettre a jour.bat"
     if (-not (Test-Path $cible) -or (Get-FileHash $Source).Hash -ne (Get-FileHash $cible).Hash) {
         Copy-Item $Source $cible -Force -ErrorAction SilentlyContinue
     }
@@ -138,9 +139,11 @@ try {
     # Le dossier par defaut n'est propose que si aucune installation n'est trouvee.
     Etape "Dossier d'installation"
     $memoire = Join-Path $env:LOCALAPPDATA "ProspectionOutlook\installation.txt"
-    function Test-Installation { param([string]$D) $D -and (Test-Path (Join-Path $D "Scripts\Serveur-Interface.ps1")) }
+    # Installation existante : organisation actuelle (Programme\) ou ancienne (Scripts\ a la racine)
+    function Test-Installation { param([string]$D) $D -and ((Test-Path (Join-Path $D "Programme\Scripts\Serveur-Interface.ps1")) -or (Test-Path (Join-Path $D "Scripts\Serveur-Interface.ps1"))) }
     $detecte = $null; $origine = ""
     $ici = Split-Path -Parent $env:INSTALLEUR
+    if ((Split-Path -Leaf $ici) -eq "Programme") { $ici = Split-Path -Parent $ici }   # installeur range dans Programme\
     if (Test-Installation $ici) { $detecte = $ici; $origine = "dossier de ce fichier" }
     if (-not $detecte -and (Test-Path $memoire)) {
         $m = ([string](Get-Content $memoire -TotalCount 1 -Encoding UTF8)).Trim()
@@ -176,7 +179,8 @@ try {
         }
     }
     $dossier = [IO.Path]::GetFullPath($dossier)
-    $miseAJour = Test-Path (Join-Path $dossier "Scripts\Serveur-Interface.ps1")
+    $miseAJour = Test-Installation $dossier
+    $ancienneOrganisation = Test-Path (Join-Path $dossier "Scripts\Serveur-Interface.ps1")   # a ranger apres la copie
     New-Item -ItemType Directory -Force $dossier | Out-Null
     if ($miseAJour) { Ok "$dossier (installation existante : mise a jour, tes campagnes sont conservees)" }
     else { Ok $dossier }
@@ -192,7 +196,8 @@ try {
     $publiee = Get-VersionPubliee
     if ($miseAJour) {
         $installee = ""
-        $fv = Join-Path $dossier "version.txt"
+        $fv = Join-Path $dossier "Programme\version.txt"
+        if (-not (Test-Path $fv)) { $fv = Join-Path $dossier "version.txt" }   # ancienne organisation
         if (Test-Path $fv) { $installee = ("" + (Get-Content $fv -TotalCount 1)).Trim().Split(" ")[0] }
         if ($publiee -and $installee -eq $publiee.Sha -and $env:PROSPECTION_FORCER -ne "1") {
             Ok "Deja a jour : version $($publiee.Sha) du $($publiee.Date)"
@@ -225,7 +230,10 @@ try {
     $tmp = Join-Path $env:TEMP ("prospection-install-" + [guid]::NewGuid().ToString("N").Substring(0, 8))
     New-Item -ItemType Directory $tmp | Out-Null
     # Archive du tag de la derniere release ; la branche main seulement si aucune release n'est joignable
-    if ($publiee) {
+    if ($env:PROSPECTION_ARCHIVE) {
+        $zip = Join-Path $tmp "archive.zip"; Copy-Item $env:PROSPECTION_ARCHIVE $zip
+        Alerte "Installation de l'archive locale $($env:PROSPECTION_ARCHIVE) (test)."
+    } elseif ($publiee) {
         $zip = Get-Fichier -Url "https://github.com/$depot/archive/refs/tags/$($publiee.Ref).zip" -Dossier $tmp
     } else {
         Alerte "Aucune release trouvee : installation de la version en cours de developpement (branche $branche)."
@@ -235,61 +243,45 @@ try {
     Expand-Archive -Path $zip -DestinationPath $extrait
     $racineDepot = (Get-ChildItem $extrait -Directory | Select-Object -First 1).FullName
     $source = Join-Path $racineDepot "outil"
-    if (-not (Test-Path (Join-Path $source "Interface\app\index.html"))) { throw "Archive incomplete (interface absente)." }
+    if (-not (Test-Path (Join-Path $source "Programme\Interface\app\index.html"))) { throw "Archive incomplete (interface absente)." }
     $version = if ($publiee) { $publiee.Sha } else { "" }
     Ok "Version $(if ($version) { "$version du $($publiee.Date)" } else { 'courante' }) telechargee"
 
     # ---------- 4. Copie (sans toucher aux campagnes) ----------
     Etape "Installation des fichiers"
-    function Copier {
-        param([string]$Relatif, [switch]$Miroir)
-        $de = Join-Path $source $Relatif; $vers = Join-Path $dossier $Relatif
-        $opt = @("/E", "/NFL", "/NDL", "/NJH", "/NJS", "/NP")
-        if ($Miroir) { $opt[0] = "/MIR" }
-        & robocopy $de $vers @opt | Out-Null
-        if ($LASTEXITCODE -ge 8) { throw "Echec de la copie de $Relatif (code $LASTEXITCODE)" }
-    }
-    Copier "Scripts"
-    Copier "Interface\app" -Miroir
-    Copier "Campagnes\_Modele campagne" -Miroir
+    # Organisation du dossier : a la racine, seulement le raccourci "Prospection Outlook", Campagnes\ (les donnees)
+    # et LisezMoi.txt ; tout l'outil est dans Programme\ (copie en miroir, sauf son journal et les anciens scripts).
+    & robocopy (Join-Path $source "Programme") (Join-Path $dossier "Programme") /MIR /XD Journal "Anciens scripts" /NFL /NDL /NJH /NJS /NP | Out-Null
+    if ($LASTEXITCODE -ge 8) { throw "Echec de la copie de Programme (code $LASTEXITCODE)" }
     Get-ChildItem $source -File | ForEach-Object { Copy-Item $_.FullName (Join-Path $dossier $_.Name) -Force }
     New-Item -ItemType Directory -Force (Join-Path $dossier "Campagnes") | Out-Null
     # Installeur de mise a jour : la derniere version (celle de l'archive), pas forcement ce fichier-ci
     Update-InstalleurLocal -Dossier $dossier -Source (Join-Path $racineDepot "Installer.bat")
     # version.txt : "<version> <date de la version>" (comparee a la version publiee lors des mises a jour)
-    if ($version) { Set-Content (Join-Path $dossier "version.txt") "$version $($publiee.Date)" -Encoding ASCII }
+    if ($version) { Set-Content (Join-Path $dossier "Programme\version.txt") "$version $($publiee.Date)" -Encoding ASCII }
+    # Ancienne organisation (version 1.11 ou anterieure) : fichiers de l'outil ranges dans Programme\
+    if ($ancienneOrganisation) {
+        Etape "Rangement du dossier (nouvelle organisation)"
+        foreach ($l in @(& (Join-Path $dossier "Programme\Scripts\Migrer-Dossier.ps1") -Dossier $dossier)) { Info $l }
+        Ok "Dossier range : lance l'outil avec le raccourci 'Prospection Outlook'"
+    }
     Save-Memoire
     # Fichiers telecharges : on retire la marque "provenant d'Internet" (sinon avertissements Windows)
     Get-ChildItem $dossier -Recurse -File -Include *.bat, *.ps1 | Unblock-File -ErrorAction SilentlyContinue
     Ok "Outil installe dans $dossier"
     $nbCampagnes = @(Get-ChildItem (Join-Path $dossier "Campagnes") -Directory | Where-Object { $_.Name -notlike "_*" }).Count
+    # Raccourci "Prospection Outlook" dans le dossier (icone de l'outil) : c'est lui qu'on double-clique
+    & (Join-Path $dossier "Programme\Scripts\Raccourci.ps1") -Lien (Join-Path $dossier "Prospection Outlook.lnk") -Dossier $dossier
+    Ok "Raccourci 'Prospection Outlook' dans le dossier"
     if ($nbCampagnes) { Ok "$nbCampagnes campagne(s) existante(s) conservee(s)" }
 
     # ---------- 5. Raccourcis ----------
     if ($env:PROSPECTION_SANS_RACCOURCI -ne "1") {
         Etape "Raccourcis"
-        $shell = New-Object -ComObject WScript.Shell
+        # meme raccourci que dans le dossier : application sans fenetre noire, icone de l'outil
         $menu = Join-Path ([Environment]::GetFolderPath("Programs")) "Prospection Outlook.lnk"
         $bureau = Join-Path ([Environment]::GetFolderPath("Desktop")) "Prospection Outlook.lnk"
-        foreach ($lnk in @($bureau, $menu)) {
-            $r = $shell.CreateShortcut($lnk)
-            # Application sans fenetre noire : conhost --headless lance le lanceur sans console visible
-            # (Interface.bat fait la meme chose, mais une console apparait un instant)
-            $conhost = Join-Path $env:SystemRoot "System32\conhost.exe"
-            $lanceur = Join-Path $dossier "Scripts\Application.ps1"
-            if ((Test-Path $conhost) -and (Test-Path $lanceur)) {
-                $r.TargetPath = $conhost
-                $r.Arguments = "--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$lanceur`""
-            } else {
-                $r.TargetPath = Join-Path $dossier "Interface.bat"
-                $r.Arguments = ""
-            }
-            $r.WorkingDirectory = $dossier
-            $icone = Join-Path $dossier "Interface\app\prospection.ico"
-            $r.IconLocation = if (Test-Path $icone) { "$icone,0" } else { "$env:SystemRoot\System32\shell32.dll,156" }
-            $r.Description = "Prospection Outlook"
-            $r.Save()
-        }
+        foreach ($lnk in @($bureau, $menu)) { & (Join-Path $dossier "Programme\Scripts\Raccourci.ps1") -Lien $lnk -Dossier $dossier }
         Ok "Raccourci 'Prospection Outlook' sur le Bureau et dans le menu Demarrer"
     }
 
@@ -345,19 +337,26 @@ try {
         $cmd = "@echo off`r`nset ""PATH=$dossierNode;%PATH%""`r`ncd /d ""%~dp0interface""`r`n" +
                "echo Environnement de developpement : Node.js $($lts.version) portable.`r`n" +
                "echo   npm run dev    interface en mode developpement`r`n" +
-               "echo   npm run build  compile dans ..\outil\Interface\app`r`ncmd /k`r`n"
+               "echo   npm run build  compile dans ..\outil\Programme\Interface\app`r`ncmd /k`r`n"
         Set-Content (Join-Path $dossierSource "Developpement.cmd") $cmd -Encoding ASCII
         Ok "Ouvre $dossierSource\Developpement.cmd pour travailler sur l'interface"
     }
 
     Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
 
+    # Mise a jour lancee depuis l'interface sur un dossier a l'ancienne organisation : l'ancien script de mise a jour
+    # chercherait le lanceur a son ancien emplacement, c'est donc ici qu'on relance l'application.
+    if ($ancienneOrganisation -and $env:PROSPECTION_FORCER -eq "1" -and $env:PROSPECTION_DOSSIER) {
+        $conhost = Join-Path $env:SystemRoot "System32\conhost.exe"
+        Start-Process $conhost -ArgumentList "--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$(Join-Path $dossier 'Programme\Scripts\Application.ps1')`" -SansFenetre" -WorkingDirectory $dossier
+    }
+
     Write-Host ""
     Write-Host "Installation terminee." -ForegroundColor Green
-    Write-Host "Pour demarrer : ouvre Outlook classique, puis double-clique 'Prospection Outlook' sur le Bureau"
-    Write-Host "(ou Interface.bat dans $dossier). L'application s'ouvre dans sa propre fenetre, avec une icone"
-    Write-Host "pres de l'horloge pour la rouvrir ou la quitter. Le guide d'utilisation est dans l'interface."
-    Write-Host "Pour mettre a jour plus tard : 'Installer ou mettre a jour.bat' dans ce meme dossier."
+    Write-Host "Pour demarrer : ouvre Outlook classique, puis double-clique 'Prospection Outlook' (sur le Bureau ou"
+    Write-Host "dans $dossier). L'application s'ouvre dans sa propre fenetre, avec une icone pres de l'horloge"
+    Write-Host "pour la rouvrir ou la quitter. Le guide d'utilisation est dans l'application."
+    Write-Host "Pour mettre a jour plus tard : dans l'application, Parametres > Mettre a jour."
 } catch {
     Write-Host ""
     Write-Host "ERREUR : $($_.Exception.Message)" -ForegroundColor Red

@@ -40,7 +40,7 @@ Prérequis : Windows et **Outlook classique** (pas le « nouvel Outlook »), ave
 1. Télécharge **[Installer.bat](https://github.com/raphaeldeux/prospection-outlook/releases/latest/download/Installer.bat)**.
 2. Double-clique dessus. Si Windows affiche « Windows a protégé votre ordinateur », clique sur *Informations complémentaires* puis *Exécuter quand même*.
 3. Accepte le dossier proposé (`Documents\Prospection`) ou indiques-en un autre. Réponds **N** à la question sur les outils de développement.
-4. Ouvre Outlook, puis double-clique le raccourci **Prospection Outlook** sur le Bureau. L'outil s'ouvre dans **sa propre fenêtre**, sans fenêtre noire. Une **icône près de l'horloge** permet de le rouvrir ou de le quitter. Fermer la fenêtre suffit : l'outil s'arrête seul quelques minutes plus tard.
+4. Ouvre Outlook, puis double-clique **Prospection Outlook** (l'icône enveloppe, sur le Bureau ou dans ton dossier Prospection). L'outil s'ouvre dans **sa propre fenêtre**, sans fenêtre noire. Une **icône près de l'horloge** permet de le rouvrir ou de le quitter. Fermer la fenêtre suffit : l'outil s'arrête seul quelques minutes plus tard.
 5. Clique sur **Guide d'utilisation**, en bas à gauche de l'interface.
 
 L'installeur :
@@ -48,11 +48,20 @@ L'installeur :
 - vérifie les prérequis : Outlook classique et signature ;
 - télécharge la **dernière version publiée** (la dernière [Release](https://github.com/raphaeldeux/prospection-outlook/releases)), jamais un travail en cours ;
 - la copie dans ton dossier ;
-- crée les raccourcis sur le Bureau et dans le menu Démarrer.
+- crée le raccourci **Prospection Outlook** dans le dossier, sur le Bureau et dans le menu Démarrer.
 
-**Mettre à jour** : dans l'interface, **Paramètres → Mettre à jour**. La page se recharge toute seule sur la nouvelle version. Tu peux aussi double-cliquer `Installer ou mettre a jour.bat` dans ton dossier Prospection, ou relancer un `Installer.bat` fraîchement téléchargé : il retrouve tout seul ton dossier d'installation, même s'il ne s'agit pas du dossier par défaut. Tes campagnes, dans `Campagnes\`, ne sont jamais modifiées : seule la campagne modèle `_Modele campagne` est remplacée.
+Le dossier installé est volontairement simple :
 
-**Sans l'installeur** : clique sur *Code > Download ZIP* et copie le contenu du dossier `outil` où tu veux.
+```
+Prospection Outlook   le raccourci à double-cliquer
+Campagnes\            tes campagnes (une campagne = un dossier)
+LisezMoi.txt
+Programme\            l'outil lui-même : rien à ouvrir ni à modifier
+```
+
+**Mettre à jour** : dans l'interface, **Paramètres → Mettre à jour**. La page se recharge toute seule sur la nouvelle version. Tu peux aussi relancer un `Installer.bat` fraîchement téléchargé (ou `Programme\Installer ou mettre a jour.bat`) : il retrouve tout seul ton dossier d'installation, même s'il ne s'agit pas du dossier par défaut. Tes campagnes, dans `Campagnes\`, ne sont jamais modifiées : seul le dossier `Programme\` est remplacé. Un dossier installé avec la version 1.11 ou une version antérieure est rangé automatiquement à la mise à jour.
+
+**Sans l'installeur** : clique sur *Code > Download ZIP*, copie le contenu du dossier `outil` où tu veux, puis lance une fois `Programme\Interface.bat` : il crée le raccourci **Prospection Outlook**.
 
 ## Confidentialité
 
@@ -73,12 +82,16 @@ parametres.json           délai avant relance et objets communs des 4 mails
 ```
 Installer.bat           installeur / mise à jour portable (fichier autonome, publié dans les Releases)
 outil/                  ce que les utilisateurs copient (prêt à l'emploi)
-  Interface.bat         lance l'application (Interface.bat /console : avec le journal en direct, pour le depannage)
-  Scripts/              moteur PowerShell (pilote Outlook en COM)
-    Application.ps1     lanceur sans console : serveur en arriere-plan, icone pres de l'horloge, fenetre Edge
-    Serveur-Interface.ps1  serveur local de l'interface (localhost:8765)
-  Interface/app/        interface compilée (versionnée : pas besoin de Node pour l'utiliser)
-  Campagnes/_Modele campagne/
+  LisezMoi.txt
+  Programme/            l'outil (le raccourci « Prospection Outlook » est créé à côté à l'installation)
+    Interface.bat       lance l'application (Interface.bat /console : avec le journal en direct, pour le dépannage)
+    Scripts/            moteur PowerShell (pilote Outlook en COM)
+      Application.ps1     lanceur sans console : serveur en arrière-plan, icône près de l'horloge, fenêtre Edge
+      Serveur-Interface.ps1  serveur local de l'interface (localhost:8765)
+      Raccourci.ps1       crée le raccourci « Prospection Outlook » (icône de l'outil)
+      Migrer-Dossier.ps1  range un dossier installé avec l'ancienne organisation
+    Interface/app/      interface compilée (versionnée : pas besoin de Node pour l'utiliser)
+    Modele campagne/    copié pour chaque nouvelle campagne
 interface/              code source de l'interface (React + Vite + shadcn/ui)
 Deployer.ps1            copie outil/ vers un dossier de travail sans toucher aux campagnes
 ```
@@ -102,7 +115,7 @@ cd ..
 powershell -File Deployer.ps1 -Cible "C:\chemin\vers\ton\dossier\Prospection"
 ```
 
-`Deployer.ps1` écrit dans `version.txt` le dernier tag de release, suivi de `+local` si `outil/` a changé depuis.
+`Deployer.ps1` écrit dans `Programme\version.txt` le dernier tag de release, suivi de `+local` si `outil/` a changé depuis.
 
 ### Publier une version
 

@@ -4,13 +4,13 @@ interface/node_modules/.tmp/
 *.tsbuildinfo
 *.log
 
-# Donnees personnelles : seules les campagnes modeles sont publiees
-outil/Campagnes/*
-!outil/Campagnes/_Modele campagne/
+# Donnees personnelles : les campagnes ne sont jamais publiees (le modele est dans outil/Programme)
+outil/Campagnes/
 outil/Archives/
 
-# Raccourci local cree par l'installeur (chemin propre au poste)
+# Raccourcis locaux crees par l'installeur ou l'application (chemins propres au poste)
+*.lnk
 Developpement.cmd
 
 # Journal de l'application (mode sans fenetre)
-outil/Journal/
+outil/Programme/Journal/

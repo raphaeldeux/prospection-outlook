@@ -15,7 +15,7 @@
 #   POST /api/mettre-a-jour -> lance la mise a jour (installeur) puis redemarre l'interface
 #   PUT  /api/issue     -> issue d'un contact (RDV, pas interesse...) dans issues.json
 #   POST /api/outlook-reponse -> ouvre dans Outlook le dernier mail recu d'un contact
-#   POST /api/campagnes -> cree une campagne a partir de "_Modele campagne"
+#   POST /api/campagnes -> cree une campagne a partir de Programme\Modele campagne
 #
 # Securite : ecoute uniquement sur localhost, et chaque appel /api doit porter l'en-tete
 # X-Prospection (un site web externe ne peut pas l'ajouter sans autorisation CORS, qu'on ne donne pas).
@@ -41,10 +41,12 @@ if ($Journal) {
     Start-Transcript -Path $Journal -Append | Out-Null
 }
 
-$racine     = Split-Path -Parent $PSScriptRoot
+# Dossier de l'outil : <dossier Prospection>\Programme\Scripts -> Programme (outil) et dossier Prospection (racine)
+$programme  = Split-Path -Parent $PSScriptRoot
+$racine     = Split-Path -Parent $programme
 $scripts    = $PSScriptRoot
 $campagnes  = Join-Path $racine "Campagnes"
-$appDir     = Join-Path $racine "Interface\app"
+$appDir     = Join-Path $programme "Interface\app"
 $utf8       = New-Object System.Text.UTF8Encoding $false
 
 if (-not (Test-Path (Join-Path $appDir "index.html"))) {
@@ -94,7 +96,7 @@ function Get-InfosVersion {
     # -Locale : sans interroger GitHub (attente du redemarrage : evite la limite de 60 appels/heure de l'API)
     param([switch]$Locale)
     $installee = $null
-    $fv = Join-Path $racine "version.txt"
+    $fv = Join-Path $programme "version.txt"
     if (Test-Path $fv) {
         $l = ("" + (Get-Content $fv -TotalCount 1)).Trim().Split(" ")
         $installee = [ordered]@{ version = $l[0]; date = if ($l.Count -gt 1) { $l[1] } else { "" } }
@@ -126,17 +128,17 @@ if ($parent) {
 }
 if (-not $SansInstallation) {
     $env:PROSPECTION_DOSSIER = $Dossier; $env:PROSPECTION_DEV = "N"; $env:PROSPECTION_FORCER = "1"
-    cmd /c "`"$Dossier\Installer ou mettre a jour.bat`" < nul"
+    cmd /c "`"$Dossier\Programme\Installer ou mettre a jour.bat`" < nul"
     $env:PROSPECTION_DOSSIER = $null; $env:PROSPECTION_DEV = $null; $env:PROSPECTION_FORCER = $null
 }
 $env:PROSPECTION_SANS_NAVIGATEUR = "1"
 # relance de l'application sans fenetre noire (lanceur via conhost --headless) ; a defaut, Interface.bat
-$lanceur = Join-Path $Dossier "Scripts\Application.ps1"
+$lanceur = Join-Path $Dossier "Programme\Scripts\Application.ps1"
 $conhost = Join-Path $env:SystemRoot "System32\conhost.exe"
 if ((Test-Path $lanceur) -and (Test-Path $conhost)) {
     Start-Process -FilePath $conhost -ArgumentList "--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$lanceur`" -Port $Port -SansFenetre" -WorkingDirectory $Dossier
 } else {
-    Start-Process -FilePath (Join-Path $Dossier "Interface.bat") -ArgumentList "-Port $Port" -WorkingDirectory $Dossier
+    Start-Process -FilePath (Join-Path $Dossier "Programme\Interface.bat") -ArgumentList "-Port $Port" -WorkingDirectory $Dossier
 }
 Write-Host ""
 Write-Host "Termine : l'interface redemarre, la page va se recharger." -ForegroundColor Green
@@ -458,7 +460,7 @@ try {
                 }
 
                 if ($chemin -eq "/api/mettre-a-jour" -and $req.HttpMethod -eq "POST") {
-                    $installeur = Join-Path $racine "Installer ou mettre a jour.bat"
+                    $installeur = Join-Path $programme "Installer ou mettre a jour.bat"
                     if (-not (Test-Path $installeur)) { Send-Json $ctx 404 @{ erreur = "Installeur introuvable dans le dossier de l'outil : retelecharge Installer.bat." }; continue }
                     $f = [IO.Path]::Combine($env:TEMP, "prospection-maj-$([guid]::NewGuid().ToString('N').Substring(0, 8)).ps1")
                     [IO.File]::WriteAllText($f, $scriptMiseAJour, [Text.Encoding]::ASCII)
@@ -528,7 +530,7 @@ try {
                 }
 
                 if ($chemin -eq "/api/campagnes" -and $req.HttpMethod -eq "POST") {
-                    # Nouvelle campagne = copie de "_Modele campagne", avec un contacts.csv vide (en-tetes seules)
+                    # Nouvelle campagne = copie de Programme\Modele campagne, avec un contacts.csv vide (en-tetes seules)
                     $corps = (New-Object IO.StreamReader($req.InputStream, $utf8)).ReadToEnd() | ConvertFrom-Json
                     $nom = ([string]$corps.nom).Trim()
                     if (-not $nom -or $nom.StartsWith("_") -or $nom -match '[\\/:*?"<>|]' -or $nom -like '.*') {
@@ -536,7 +538,7 @@ try {
                     }
                     $dest = Join-Path $campagnes $nom
                     if (Test-Path $dest) { Send-Json $ctx 409 @{ erreur = "Une campagne porte deja ce nom." }; continue }
-                    Copy-Item (Join-Path $campagnes "_Modele campagne") $dest -Recurse
+                    Copy-Item (Join-Path $programme "Modele campagne") $dest -Recurse
                     $csv = Join-Path $dest "contacts.csv"
                     $entete = (Get-Content $csv -Encoding UTF8 -TotalCount 1)
                     [IO.File]::WriteAllText($csv, "$entete`r`n", (New-Object System.Text.UTF8Encoding $true))
