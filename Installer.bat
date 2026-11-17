@@ -130,11 +130,11 @@ try {
             Ok "Installation existante trouvee ($origine) :"
             Info $detecte
             $reponse = Read-Host "       Appuie sur Entree pour la mettre a jour, ou tape un autre chemin"
-            $dossier = if (([string]$reponse).Trim()) { ([string]$reponse).Trim().Trim('"') } else { $detecte }
+            $dossier = if (("$reponse").Trim()) { ("$reponse").Trim().Trim('"') } else { $detecte }
         } else {
             Info "Dossier propose : $parDefaut"
             $reponse = Read-Host "       Appuie sur Entree pour l'accepter, ou tape un autre chemin"
-            $dossier = if (([string]$reponse).Trim()) { ([string]$reponse).Trim().Trim('"') } else { $parDefaut }
+            $dossier = if (("$reponse").Trim()) { ("$reponse").Trim().Trim('"') } else { $parDefaut }
         }
     }
     $dossier = [IO.Path]::GetFullPath($dossier)
