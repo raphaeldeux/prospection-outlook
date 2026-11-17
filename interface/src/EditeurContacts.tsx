@@ -50,10 +50,13 @@ export function EditeurContacts(props: {
   colonnes: string[]
   contacts: LigneContact[]
   campagneDemarree: boolean
+  /** Étapes déjà envoyées, par adresse e-mail (en minuscules), d'après le suivi Outlook */
+  envois: Record<string, number[]>
   onEnregistre: () => void
   onModifie: (modifie: boolean) => void
 }) {
   const { colonnes, campagneDemarree } = props
+  const [confirmerRisques, setConfirmerRisques] = useState(false)
   const [lignes, setLignes] = useState<LigneContact[]>(props.contacts)
   const [reference, setReference] = useState(JSON.stringify(props.contacts))
   const [sauvegarde, setSauvegarde] = useState(false)
@@ -76,6 +79,31 @@ export function EditeurContacts(props: {
     lignes.forEach((l) => l.Email && vus.set(l.Email.trim().toLowerCase(), (vus.get(l.Email.trim().toLowerCase()) ?? 0) + 1))
     return new Set([...vus.entries()].filter(([, n]) => n > 1).map(([e]) => e))
   }, [lignes])
+
+  /**
+   * Modifications qui empêcheraient le suivi de retrouver des mails déjà envoyés : le suivi reconnaît un
+   * mail par l'adresse du destinataire et par son objet (SujetN avec les variables remplacées). Changer
+   * l'adresse, l'objet d'une étape envoyée, ou une valeur utilisée dans cet objet ({{NOM}}...) « perd » le mail.
+   */
+  const risques = useMemo(() => {
+    const originales: LigneContact[] = JSON.parse(reference)
+    const parLigne = new Map<number, { cols: Set<string>; etapes: number[] }>()
+    lignes.forEach((l, i) => {
+      const o = originales[i]
+      if (!o) return // contact ajouté depuis le dernier enregistrement
+      const etapes = props.envois[(o.Email ?? "").trim().toLowerCase()] ?? []
+      if (etapes.length === 0) return
+      const sensibles = new Set<string>(["Email"])
+      for (const n of etapes) {
+        sensibles.add(`Sujet${n}`)
+        const objet = o[`Sujet${n}`] ?? ""
+        ;(["Civilite", "Nom", "Entreprise"] as const).forEach((v) => objet.includes(`{{${v.toUpperCase()}}}`) && sensibles.add(v))
+      }
+      const cols = new Set([...sensibles].filter((c) => (l[c] ?? "").trim() !== (o[c] ?? "").trim()))
+      if (cols.size) parLigne.set(i, { cols, etapes })
+    })
+    return parLigne
+  }, [lignes, reference, props.envois])
 
   const modifier = (i: number, col: string, v: string) =>
     setLignes((ls) => ls.map((l, j) => (j === i ? { ...l, [col]: v } : l)))
@@ -103,7 +131,12 @@ export function EditeurContacts(props: {
     toast.success(`${nouvelles.length} contact(s) ajouté(s) en fin de liste. Pense à enregistrer.`)
   }
 
-  async function enregistrer() {
+  async function enregistrer(forcer = false) {
+    if (risques.size > 0 && !forcer) {
+      setConfirmerRisques(true)
+      return
+    }
+    setConfirmerRisques(false)
     setSauvegarde(true)
     try {
       const r = await enregistrerContacts(props.campagne, colonnes, lignes)
@@ -153,7 +186,7 @@ export function EditeurContacts(props: {
       </Card>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button onClick={enregistrer} disabled={!modifie || sauvegarde}>
+        <Button onClick={() => enregistrer()} disabled={!modifie || sauvegarde}>
           {sauvegarde ? <Loader2Icon className="animate-spin" /> : <SaveIcon />} Enregistrer
         </Button>
         <Button variant="ghost" disabled={!modifie} onClick={() => setLignes(JSON.parse(reference))}>
@@ -172,6 +205,30 @@ export function EditeurContacts(props: {
           {nbErreurs > 0 && `${nbErreurs} adresse(s) e-mail invalide(s) ou manquante(s), en rouge. `}
           {doublons.size > 0 && `${doublons.size} adresse(s) en double.`}
         </p>
+      )}
+
+      {risques.size > 0 && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+          <p className="flex items-center gap-1.5 font-medium">
+            <TriangleAlertIcon className="size-4" /> Attention : ces contacts ont déjà reçu des mails
+          </p>
+          <p className="mt-1">
+            Le suivi retrouve un mail grâce à l'adresse et à l'objet. En les modifiant (cases orange), les mails déjà envoyés ne
+            seront plus reconnus : le contact repassera en « Mail1 à créer » et pourrait recevoir le même mail deux fois.
+          </p>
+          <ul className="mt-1 list-disc pl-5">
+            {[...risques.entries()].map(([i, r]) => (
+              <li key={i}>
+                {lignes[i].Nom || lignes[i].Email} : Mail{r.etapes.join(", Mail")} déjà envoyé(s), modifié :{" "}
+                {[...r.cols].map((c) => libelleColonne[c] ?? c).join(", ")}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1">
+            Pour écrire à une autre personne, ajoute plutôt un nouveau contact en fin de liste. Sinon, « Annuler les
+            modifications ».
+          </p>
+        </div>
       )}
 
       <Card className="py-0">
@@ -199,8 +256,13 @@ export function EditeurContacts(props: {
                   <td className="px-2 text-xs text-muted-foreground tabular-nums">{i + 1}</td>
                   {colonnes.map((c) => {
                     const invalide = c === "Email" && (erreurs[i] || doublons.has((l.Email ?? "").trim().toLowerCase()))
+                    const risque = risques.get(i)?.cols.has(c)
                     return (
-                      <td key={c} className="px-1 py-1">
+                      <td
+                        key={c}
+                        className={cn("px-1 py-1", risque && "bg-amber-100 dark:bg-amber-950")}
+                        title={risque ? "Modifié alors que des mails sont déjà partis : le suivi ne les retrouvera plus" : undefined}
+                      >
                         {c === "Civilite" ? (
                           <select
                             className="h-7 w-full rounded-md border border-transparent bg-transparent px-1 text-sm hover:border-input focus:border-ring"
@@ -260,6 +322,22 @@ export function EditeurContacts(props: {
             >
               Supprimer
             </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmerRisques} onOpenChange={(o) => !o && setConfirmerRisques(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Enregistrer quand même ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {risques.size} contact(s) déjà contacté(s) ont une adresse ou un objet modifié. Les mails déjà envoyés ne seront
+              plus reconnus par le suivi, et une nouvelle création de brouillons pourrait leur renvoyer le même mail.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Revenir aux contacts</AlertDialogCancel>
+            <Button variant="destructive" onClick={() => enregistrer(true)}>Enregistrer quand même</Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

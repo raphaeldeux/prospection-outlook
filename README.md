@@ -30,7 +30,7 @@ L'installeur :
 - la copie dans ton dossier ;
 - crée les raccourcis sur le Bureau et dans le menu Démarrer.
 
-**Mettre à jour** : double-clique `Installer ou mettre a jour.bat` dans ton dossier Prospection. Tes campagnes, dans `Campagnes\`, ne sont jamais modifiées : seule la campagne modèle `_Modele campagne` est remplacée.
+**Mettre à jour** : double-clique `Installer ou mettre a jour.bat` dans ton dossier Prospection, ou relance un `Installer.bat` fraîchement téléchargé : il retrouve tout seul ton dossier d'installation, même s'il ne s'agit pas du dossier par défaut. Tes campagnes, dans `Campagnes\`, ne sont jamais modifiées : seule la campagne modèle `_Modele campagne` est remplacée.
 
 **Sans l'installeur** : clique sur *Code > Download ZIP* et copie le contenu du dossier `outil` où tu veux.
 

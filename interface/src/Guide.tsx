@@ -147,7 +147,9 @@ export function Guide() {
               contact. Pour arrêter les relances d'un contact, vide plutôt ses objets Mail2 à Mail4.
             </li>
             <li>
-              Ne modifie pas l'objet d'une étape déjà envoyée : le suivi ne retrouverait plus ces mails.
+              Ne modifie ni l'adresse, ni l'objet (ni l'entreprise, le nom ou la civilité s'ils apparaissent dans l'objet) d'un
+              contact qui a déjà reçu un mail : le suivi ne retrouverait plus ce mail et le contact repasserait en « Mail1 à
+              créer ». L'onglet Contacts signale ces modifications en orange et demande confirmation avant d'enregistrer.
             </li>
           </ul>
         </div>

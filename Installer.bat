@@ -27,6 +27,7 @@ $branche   = "main"
 #   PROSPECTION_DOSSIER        dossier d'installation (sinon : question)
 #   PROSPECTION_DEV            O ou N : outils de developpement (sinon : question)
 #   PROSPECTION_SANS_RACCOURCI 1 : ne pas creer de raccourcis
+#   PROSPECTION_SANS_MEMOIRE   1 : ne pas memoriser le dossier d'installation
 #   PROSPECTION_PROGRAMMES     dossier des programmes portables (defaut : %LOCALAPPDATA%\Programs)
 #   PROSPECTION_SOURCE         dossier du code source (defaut : %LOCALAPPDATA%\prospection-outlook)
 $parDefaut = Join-Path ([Environment]::GetFolderPath("MyDocuments")) "Prospection"
@@ -65,12 +66,45 @@ try {
     else { Alerte "Aucune signature Outlook : cree-en une (Outlook > Fichier > Options > Courrier > Signatures)." }
 
     # ---------- 2. Dossier d'installation ----------
+    # Une installation existante est recherchee, dans cet ordre :
+    #   1. le dossier de ce fichier (cas de "Installer ou mettre a jour.bat" dans le dossier installe)
+    #   2. le dossier memorise lors de la derniere installation (%LOCALAPPDATA%\ProspectionOutlook)
+    #   3. la cible du raccourci "Prospection Outlook" (Bureau ou menu Demarrer)
+    # Le dossier par defaut n'est propose que si aucune installation n'est trouvee.
     Etape "Dossier d'installation"
+    $memoire = Join-Path $env:LOCALAPPDATA "ProspectionOutlook\installation.txt"
+    function Test-Installation { param([string]$D) $D -and (Test-Path (Join-Path $D "Scripts\Serveur-Interface.ps1")) }
+    $detecte = $null; $origine = ""
+    $ici = Split-Path -Parent $env:INSTALLEUR
+    if (Test-Installation $ici) { $detecte = $ici; $origine = "dossier de ce fichier" }
+    if (-not $detecte -and (Test-Path $memoire)) {
+        $m = ([string](Get-Content $memoire -TotalCount 1 -Encoding UTF8)).Trim()
+        if (Test-Installation $m) { $detecte = $m; $origine = "derniere installation" }
+    }
+    if (-not $detecte) {
+        try {
+            $wsh = New-Object -ComObject WScript.Shell
+            foreach ($lnk in @((Join-Path ([Environment]::GetFolderPath("Desktop")) "Prospection Outlook.lnk"),
+                               (Join-Path ([Environment]::GetFolderPath("Programs")) "Prospection Outlook.lnk"))) {
+                if (-not (Test-Path $lnk)) { continue }
+                $d = Split-Path -Parent $wsh.CreateShortcut($lnk).TargetPath
+                if (Test-Installation $d) { $detecte = $d; $origine = "raccourci Prospection Outlook"; break }
+            }
+        } catch {}
+    }
+
     $dossier = $env:PROSPECTION_DOSSIER
     if (-not $dossier) {
-        Info "Dossier propose : $parDefaut"
-        $reponse = Read-Host "       Appuie sur Entree pour l'accepter, ou tape un autre chemin"
-        $dossier = if ($reponse.Trim()) { $reponse.Trim().Trim('"') } else { $parDefaut }
+        if ($detecte) {
+            Ok "Installation existante trouvee ($origine) :"
+            Info $detecte
+            $reponse = Read-Host "       Appuie sur Entree pour la mettre a jour, ou tape un autre chemin"
+            $dossier = if ($reponse.Trim()) { $reponse.Trim().Trim('"') } else { $detecte }
+        } else {
+            Info "Dossier propose : $parDefaut"
+            $reponse = Read-Host "       Appuie sur Entree pour l'accepter, ou tape un autre chemin"
+            $dossier = if ($reponse.Trim()) { $reponse.Trim().Trim('"') } else { $parDefaut }
+        }
     }
     $dossier = [IO.Path]::GetFullPath($dossier)
     $miseAJour = Test-Path (Join-Path $dossier "Scripts\Serveur-Interface.ps1")
@@ -118,6 +152,11 @@ try {
     New-Item -ItemType Directory -Force (Join-Path $dossier "Campagnes") | Out-Null
     Copy-Item $env:INSTALLEUR (Join-Path $dossier "Installer ou mettre a jour.bat") -Force -ErrorAction SilentlyContinue
     if ($version) { Set-Content (Join-Path $dossier "version.txt") "$version $(Get-Date -Format 'dd/MM/yyyy HH:mm')" -Encoding ASCII }
+    # Memorise le dossier pour les prochaines mises a jour (fichier personnel, aucun droit requis)
+    if ($env:PROSPECTION_SANS_MEMOIRE -ne "1") {
+        New-Item -ItemType Directory -Force (Split-Path $memoire) | Out-Null
+        [IO.File]::WriteAllText($memoire, $dossier, (New-Object Text.UTF8Encoding $false))
+    }
     # Fichiers telecharges : on retire la marque "provenant d'Internet" (sinon avertissements Windows)
     Get-ChildItem $dossier -Recurse -File -Include *.bat, *.ps1 | Unblock-File -ErrorAction SilentlyContinue
     Ok "Outil installe dans $dossier"

@@ -347,6 +347,15 @@ function VueCampagne(props: {
     }
   }, [campagne.Nom, version])
   const campagneDemarree = contacts.some((c) => c.Mail1)
+  // Étapes déjà envoyées par adresse : sert à alerter si on modifie un contact déjà contacté
+  const envois = useMemo(() => {
+    const r: Record<string, number[]> = {}
+    contacts.forEach((c) => {
+      const etapes = [1, 2, 3, 4].filter((n) => c[`Mail${n}` as "Mail1"])
+      if (c.Email && etapes.length) r[c.Email.trim().toLowerCase()] = etapes
+    })
+    return r
+  }, [contacts])
   const apresEnregistrement = () => {
     setVersion((v) => v + 1)
     props.onActualiser()
@@ -405,6 +414,7 @@ function VueCampagne(props: {
               colonnes={fichiers.colonnes}
               contacts={fichiers.contacts}
               campagneDemarree={campagneDemarree}
+              envois={envois}
               onEnregistre={apresEnregistrement}
               onModifie={(m) => props.onModifie("contacts", m)}
             />
