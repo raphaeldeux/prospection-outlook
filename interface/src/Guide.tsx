@@ -231,7 +231,7 @@ export function Guide() {
             <p>
               Les variables <Code>{"{{CIVILITE}}"}</Code>, <Code>{"{{PRENOM}}"}</Code>, <Code>{"{{NOM}}"}</Code> et{" "}
               <Code>{"{{ENTREPRISE}}"}</Code> sont remplacées pour chaque contact, par exemple{" "}
-              <Code>{"[{{ENTREPRISE}} / Wavestone] Discutons cybersécurité"}</Code>.
+              <Code>{"[{{ENTREPRISE}}] Discutons cybersécurité"}</Code>.
             </p>
             <ul className="list-disc space-y-1 pl-5">
               <li>
@@ -419,14 +419,18 @@ export function Guide() {
               <strong>Mettre à jour</strong>. La mise à jour prend une quinzaine de secondes, ne touche jamais à tes campagnes, et
               l'interface redémarre seule. Une pastille signale quand une nouvelle version est disponible.
             </p>
+            <p>
+              Seules les <strong>versions publiées</strong> (releases v1.7.0, v1.8.0…) sont installées, jamais un travail en cours.
+            </p>
           </Section>
 
           <Section id="faq" titre="Questions fréquentes">
             <dl className="space-y-3">
               {[
                 ["« Outlook (classique) ne semble pas ouvert »", "Ouvre Outlook classique (pas le nouvel Outlook), attends qu'il soit chargé, puis réessaie."],
-                ["Un contact a répondu par un message d'absence", "Tout mail reçu du contact arrête ses relances. Si ce n'était qu'une absence, relance-le à la main depuis Outlook."],
-                ["« Mail2 déjà envoyé » alors que ce n'est pas le cas", "L'objet du Mail2 est probablement identique à celui du Mail1. Donne-lui un objet différent (par exemple « Re: » devant)."],
+                ["Un contact a répondu par un message d'absence", "Les réponses automatiques (absence du bureau, « Réponse automatique », « Automatic reply »…) sont ignorées : ses relances continuent. Si un message d'absence est quand même compté comme une réponse, relance-le à la main depuis Outlook."],
+                ["Où l'outil cherche-t-il les réponses ?", "Dans la Boîte de réception et tous ses sous-dossiers (y compris ceux remplis par tes règles Outlook), sur les 12 derniers mois. Une réponse archivée ailleurs (dossier Archive, autre boîte) n'est pas vue : clos alors le contact avec « Clore… »."],
+                ["« objet identique à celui du MailN »", "Deux étapes ont le même objet pour ce contact : l'outil ne peut pas savoir laquelle est partie, il ne prépare donc rien. Donne un objet différent à chaque étape (par exemple « Re: » devant)."],
                 ["Un contact n'apparaît pas comme envoyé alors qu'il l'est", "L'objet du mail envoyé doit commencer exactement par l'objet de l'étape, à la même adresse. Vérifie aussi qu'il est dans les Éléments envoyés (pas archivé), et que tu n'as pas modifié le contact après l'envoi."],
                 ["« Plusieurs signatures Outlook existent… »", "Choisis une signature pour les nouveaux messages : Outlook > Fichier > Options > Courrier > Signatures."],
                 ["L'interface ne s'ouvre pas", "Vérifie que la fenêtre noire est ouverte, puis va sur http://localhost:8765. Si le port est occupé, une autre fenêtre de l'interface est déjà ouverte."],

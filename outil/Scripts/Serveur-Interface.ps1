@@ -65,13 +65,16 @@ function Invoke-ScriptEnfant {
     return [pscustomobject]@{ Code = $p.ExitCode; Journal = $journal }
 }
 
-function Q { param([string]$s) "'" + ($s -replace "'", "''") + "'" }   # chaine PowerShell entre quotes
+# Chaine PowerShell entre quotes. PowerShell traite AUSSI les apostrophes typographiques (U+2018 a U+201B,
+# ex. "L'offre" tape dans Word/Outlook) comme des quotes : elles sont doublees comme l'apostrophe droite,
+# sinon un nom de campagne qui en contient casserait la commande (ou y injecterait du code).
+function Q { param([string]$s) "'" + ($s -replace ("['" + [char]0x2018 + [char]0x2019 + [char]0x201A + [char]0x201B + "]"), '$0$0') + "'" }
 
 $depotGitHub = "raphaeldeux/prospection-outlook"
 
 function Get-InfosVersion {
-    # Version installee (version.txt : "<version> <date>") et derniere version publiee de l'outil
-    # (dernier changement du dossier outil/ du depot + derniere release, pour les nouveautes)
+    # Version installee (version.txt : "<version> <date>") et derniere version publiee de l'outil : la
+    # derniere release GitHub (tag vX.Y.Z), seule version installee par l'installeur
     $installee = $null
     $fv = Join-Path $racine "version.txt"
     if (Test-Path $fv) {
@@ -80,12 +83,10 @@ function Get-InfosVersion {
     }
     $publiee = $null; $release = $null
     try {
-        $c = @(Invoke-RestMethod "https://api.github.com/repos/$depotGitHub/commits?path=outil&sha=main&per_page=1" -TimeoutSec 10)[0]
-        $publiee = [ordered]@{ version = $c.sha.Substring(0, 7); date = ([datetime]$c.commit.committer.date).ToLocalTime().ToString("dd/MM/yyyy") }
-    } catch {}
-    try {
         $r = Invoke-RestMethod "https://api.github.com/repos/$depotGitHub/releases/latest" -TimeoutSec 10
-        $release = [ordered]@{ nom = [string]$r.name; notes = [string]$r.body; url = [string]$r.html_url; date = ([datetime]$r.published_at).ToLocalTime().ToString("dd/MM/yyyy") }
+        $date = ([datetime]$r.published_at).ToLocalTime().ToString("dd/MM/yyyy")
+        $publiee = [ordered]@{ version = [string]$r.tag_name; date = $date }
+        $release = [ordered]@{ nom = [string]$r.name; notes = [string]$r.body; url = [string]$r.html_url; date = $date }
     } catch {}
     $aJour = if ($installee -and $publiee) { $installee.version -eq $publiee.version } else { $null }
     return [ordered]@{ installee = $installee; publiee = $publiee; aJour = $aJour; release = $release; dossier = $racine }
@@ -354,9 +355,9 @@ try {
                     if ($email -notmatch '^[^@\s'']+@[^@\s'']+$') { Send-Json $ctx 400 @{ erreur = "Adresse invalide." }; continue }
                     $cmd = ". $(Q (Join-Path $scripts 'Commun.ps1')); " +
                            "`$ns = [Runtime.InteropServices.Marshal]::GetActiveObject('Outlook.Application').GetNamespace('MAPI'); " +
-                           "`$l = Get-ItemsParExpediteur -Folder `$ns.GetDefaultFolder(6) -Adresses @($(Q $email)) -Depuis (Get-Date).AddYears(-1); " +
+                           "`$l = Get-ReponsesRecues -Namespace `$ns -Adresses @($(Q $email)) -Depuis (Get-Date).AddYears(-1); " +
                            "`$m = `$l | Sort-Object ReceivedTime -Descending | Select-Object -First 1; " +
-                           "if (-not `$m) { throw 'Aucun mail de ce contact dans la boite de reception (deplace ou archive ?)' }; `$m.Display()"
+                           "if (-not `$m) { throw 'Aucun mail de ce contact dans la boite de reception ni ses sous-dossiers (archive ?)' }; `$m.Display()"
                     $res = Invoke-ScriptEnfant $cmd
                     if ($res.Code -eq 0) { Send-Json $ctx 200 @{ ok = $true } }
                     else { Send-Json $ctx 404 @{ erreur = ($res.Journal -replace '^ERREUR : ', '') } }

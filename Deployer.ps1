@@ -42,11 +42,25 @@ Copy-Item (Join-Path $PSScriptRoot "Installer.bat") (Join-Path $Cible "Installer
 Write-Host "  Installer ou mettre a jour.bat"
 # version.txt, au meme format que l'installeur : dernier commit touchant outil/ (+local si modifications
 # non commitees, pour que l'installeur ne la confonde pas avec la version publiee)
+# Les versions publiees sont les tags de release (vX.Y.Z) : version.txt porte le dernier tag si outil/ n'a
+# pas change depuis, sinon "<tag>+local" (la page Parametres proposera alors la version publiee).
 try {
-    $sha = (& git -C $PSScriptRoot log -1 --format=%h -- outil).Trim()
+    # "Continue" : sans tag local, git ecrit sur stderr, ce qui interromprait le bloc avec "Stop"
+    $ErrorActionPreference = "Continue"
+    & git -C $PSScriptRoot fetch --tags --quiet 2>$null   # tags des releases publiees (hors ligne : ignore)
+    $tag = (& git -C $PSScriptRoot describe --tags --abbrev=0 --match "v*" 2>$null)
     $date = (& git -C $PSScriptRoot log -1 --format=%cd --date=format:%d/%m/%Y -- outil).Trim()
-    if (& git -C $PSScriptRoot status --porcelain -- outil) { $sha += "+local" }
-    if ($sha) { Set-Content (Join-Path $Cible "version.txt") "$sha $date" -Encoding ASCII; Write-Host "  version.txt ($sha)" }
-} catch {}
+    if ($tag) {
+        $tag = $tag.Trim()
+        $modifie = (& git -C $PSScriptRoot diff --name-only $tag HEAD -- outil) -or (& git -C $PSScriptRoot status --porcelain -- outil)
+        $version = if ($modifie) { "$tag+local" } else { $tag }
+    } else {
+        $version = (& git -C $PSScriptRoot log -1 --format=%h -- outil).Trim() + "+local"
+    }
+    Set-Content (Join-Path $Cible "version.txt") "$version $date" -Encoding ASCII; Write-Host "  version.txt ($version)"
+} catch {
+    Write-Host "  version.txt non mis a jour : $($_.Exception.Message)" -ForegroundColor Yellow
+}
+$ErrorActionPreference = "Stop"
 New-Item -ItemType Directory -Force (Join-Path $Cible "Campagnes") | Out-Null
 Write-Host "Termine. Tes campagnes n'ont pas ete modifiees."

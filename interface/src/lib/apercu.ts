@@ -12,7 +12,7 @@ export function resoudreVariables(texte: string, contact?: LigneContact) {
 const echapper = (s: string) => s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;")
 
 /**
- * Meme mise en forme que Convert-MarkdownLiteToHtml (Build-Mail1.ps1 / Build-Relance.ps1) :
+ * Meme mise en forme que Convert-MarkdownLiteToHtml (Scripts/Commun.ps1) :
  * **gras**, lignes "- " en puces, [texte](lien), ligne vide = saut de ligne.
  */
 export function texteVersHtml(texte: string) {

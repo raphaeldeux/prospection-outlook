@@ -39,6 +39,20 @@ function Ok    { param([string]$t) Write-Host "   OK  $t" -ForegroundColor Green
 function Info  { param([string]$t) Write-Host "       $t" }
 function Alerte { param([string]$t) Write-Host "   /!\ $t" -ForegroundColor Yellow }
 
+function Get-VersionPubliee {
+    # Version publiee = derniere RELEASE GitHub (tag vX.Y.Z) : on installe ce tag, fige, et non la branche
+    # main, qui peut contenir des changements en cours. $null si hors ligne ou si aucune release n'existe.
+    try {
+        $r = Invoke-RestMethod "https://api.github.com/repos/$depot/releases/latest" -TimeoutSec 15
+        if (-not $r.tag_name) { return $null }
+        return [pscustomobject]@{
+            Sha  = [string]$r.tag_name   # nom historique du champ : c'est desormais le tag de la release
+            Date = ([datetime]$r.published_at).ToLocalTime().ToString("dd/MM/yyyy")
+            Ref  = [string]$r.tag_name
+        }
+    } catch { return $null }
+}
+
 function Get-Fichier {
     # Telechargement dans un dossier temporaire neuf, propre a cette installation
     param([string]$Url, [string]$Dossier)
@@ -59,11 +73,15 @@ function Get-Fichier {
 if ($env:PROSPECTION_SANS_AUTOMAJ -ne "1") {
     try {
         $marqueur = '##PS-' + 'DEBUT##'
-        # API GitHub (toujours a jour) ; en secours raw.githubusercontent.com (mis en cache ~5 min)
+        # Installeur de la derniere release (pas de la branche main) : API GitHub (toujours a jour) ;
+        # en secours raw.githubusercontent.com (mis en cache ~5 min)
+        $refInstalleur = $branche
+        $derniere = Get-VersionPubliee
+        if ($derniere) { $refInstalleur = $derniere.Ref }
         try {
-            $distant = (Invoke-WebRequest "https://api.github.com/repos/$depot/contents/Installer.bat?ref=$branche" -Headers @{ Accept = "application/vnd.github.raw" } -UseBasicParsing -TimeoutSec 20).Content
+            $distant = (Invoke-WebRequest "https://api.github.com/repos/$depot/contents/Installer.bat?ref=$refInstalleur" -Headers @{ Accept = "application/vnd.github.raw" } -UseBasicParsing -TimeoutSec 20).Content
         } catch {
-            $distant = (Invoke-WebRequest "https://raw.githubusercontent.com/$depot/$branche/Installer.bat" -UseBasicParsing -TimeoutSec 20).Content
+            $distant = (Invoke-WebRequest "https://raw.githubusercontent.com/$depot/$refInstalleur/Installer.bat" -UseBasicParsing -TimeoutSec 20).Content
         }
         if ($distant -is [byte[]]) { $distant = [Text.Encoding]::UTF8.GetString($distant) }
         $local = [IO.File]::ReadAllText($env:INSTALLEUR)
@@ -81,15 +99,6 @@ if ($env:PROSPECTION_SANS_AUTOMAJ -ne "1") {
     } catch {
         # hors ligne ou GitHub indisponible : on continue avec cette version
     }
-}
-
-function Get-VersionPubliee {
-    # Version publiee de l'outil = dernier changement du dossier outil/ du depot (un changement du README
-    # ou du code source de l'interface seul ne justifie pas de reinstaller). $null si hors ligne.
-    try {
-        $c = @(Invoke-RestMethod "https://api.github.com/repos/$depot/commits?path=outil&sha=$branche&per_page=1" -TimeoutSec 15)[0]
-        return [pscustomobject]@{ Sha = $c.sha.Substring(0, 7); Date = ([datetime]$c.commit.committer.date).ToLocalTime().ToString("dd/MM/yyyy") }
-    } catch { return $null }
 }
 
 function Update-InstalleurLocal {
@@ -211,7 +220,13 @@ try {
     Etape "Telechargement de la derniere version"
     $tmp = Join-Path $env:TEMP ("prospection-install-" + [guid]::NewGuid().ToString("N").Substring(0, 8))
     New-Item -ItemType Directory $tmp | Out-Null
-    $zip = Get-Fichier -Url "https://github.com/$depot/archive/refs/heads/$branche.zip" -Dossier $tmp
+    # Archive du tag de la derniere release ; la branche main seulement si aucune release n'est joignable
+    if ($publiee) {
+        $zip = Get-Fichier -Url "https://github.com/$depot/archive/refs/tags/$($publiee.Ref).zip" -Dossier $tmp
+    } else {
+        Alerte "Aucune release trouvee : installation de la version en cours de developpement (branche $branche)."
+        $zip = Get-Fichier -Url "https://github.com/$depot/archive/refs/heads/$branche.zip" -Dossier $tmp
+    }
     $extrait = Join-Path $tmp "extrait"
     Expand-Archive -Path $zip -DestinationPath $extrait
     $racineDepot = (Get-ChildItem $extrait -Directory | Select-Object -First 1).FullName

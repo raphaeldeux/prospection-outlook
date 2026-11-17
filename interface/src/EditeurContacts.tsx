@@ -271,7 +271,7 @@ export function EditeurContacts(props: {
                   value={objets[n - 1]}
                   onChange={(e) => changerObjet(n, e.target.value)}
                   aria-invalid={conflit ? true : undefined}
-                  placeholder={n === 1 ? "[{{ENTREPRISE}} / Wavestone] Échangeons sur vos priorités" : "Laisser vide pour ne pas faire cette relance"}
+                  placeholder={n === 1 ? "[{{ENTREPRISE}}] Échangeons sur vos priorités" : "Laisser vide pour ne pas faire cette relance"}
                 />
                 {conflit && (
                   <span className="w-full pl-26 text-xs text-destructive">

@@ -29,32 +29,6 @@ $bodyPath  = Join-Path $Campagne "Textes\Mail1.txt"
 if (-not (Test-Path $csvPath))  { throw "Fichier introuvable : $csvPath" }
 if (-not (Test-Path $bodyPath)) { throw "Fichier introuvable : $bodyPath" }
 
-function Convert-MarkdownLiteToHtml {
-    param([string[]]$lines)
-    $html = New-Object System.Collections.Generic.List[string]
-    $inList = $false
-    foreach ($rawLine in $lines) {
-        $line = $rawLine.TrimEnd()
-        if ($line.Trim() -eq "") {
-            if ($inList) { $html.Add('</ul>'); $inList = $false }
-            $html.Add("<br>")
-            continue
-        }
-        $escaped = $line -replace '&', '&amp;'
-        $escaped = [regex]::Replace($escaped, '\[([^\]]+)\]\(([^)]+)\)', '<a href="$2">$1</a>')
-        $escaped = [regex]::Replace($escaped, '\*\*(.+?)\*\*', '<strong>$1</strong>')
-        if ($escaped.TrimStart().StartsWith("- ")) {
-            if (-not $inList) { $html.Add('<ul style="margin:0 0 0 20px; padding:0;">'); $inList = $true }
-            $html.Add("<li>$($escaped.TrimStart().Substring(2))</li>")
-        } else {
-            if ($inList) { $html.Add('</ul>'); $inList = $false }
-            $html.Add("$escaped<br>")
-        }
-    }
-    if ($inList) { $html.Add('</ul>') }
-    return ($html -join "`r`n")
-}
-
 function Set-CorpsAvantSignature {
     # Insere $BodyHtml a la place des lignes vides qu'Outlook place avant la signature
     # (evite l'espace en trop qu'on aurait en collant le texte devant tout le HTMLBody).
@@ -126,43 +100,6 @@ function Get-SignatureDepuisDisque {
     return $html
 }
 
-function Get-SujetAvecSuffixeInvisible {
-    # Ajoute des caracteres invisibles (zero-width space) en nombre unique par contact, pour que
-    # chaque mail d'une meme vague ait un objet TECHNIQUEMENT different (invisible a la lecture).
-    # Sans ca, Outlook (et les outils qui s'appuient sur son regroupement de conversation, ex.
-    # Salesforce) fusionnent tous les mails de meme objet en un seul fil, meme envoyes a des
-    # destinataires differents - ce qui empeche de les consigner un par un.
-    # IMPORTANT : ne pas reordonner les lignes de contacts.csv en cours de campagne, l'indice de
-    # chaque contact doit rester stable d'une etape a l'autre pour retrouver le meme objet.
-    param([string]$Sujet, [int]$Index)
-    $zwsp = [char]0x200B
-    return $Sujet + ($zwsp.ToString() * ($Index + 1))
-}
-
-function Resolve-Variables {
-    # Remplace les variables {{CIVILITE}}, {{PRENOM}}, {{NOM}}, {{ENTREPRISE}} par les valeurs du contact.
-    # Utilisable aussi bien sur le corps du mail que sur l'objet (colonnes SujetN).
-    param([string]$Texte, $Contact)
-    return $Texte `
-        -replace '\{\{CIVILITE\}\}', $Contact.Civilite `
-        -replace '\{\{PRENOM\}\}', $Contact.Prenom `
-        -replace '\{\{NOM\}\}', $Contact.Nom `
-        -replace '\{\{ENTREPRISE\}\}', $Contact.Entreprise
-}
-
-function Test-ExisteDeja {
-    # Comparaison "commence par" (et non egalite stricte) : les mails deja crees avant l'ajout du
-    # suffixe invisible n'en ont pas, ceux crees a partir de maintenant en ont un - les deux doivent
-    # matcher sur l'objet propre (sans suffixe).
-    param($folderItems, $subjectPropre, $email)
-    foreach ($item in $folderItems) {
-        if ($item.Class -ne 43) { continue }
-        if (-not $item.Subject.StartsWith($subjectPropre, [StringComparison]::Ordinal)) { continue }
-        if (Test-EnvoyeA -Item $item -Email $email) { return $true }   # adresse SMTP, meme en interne
-    }
-    return $false
-}
-
 $bodyTemplate = Get-Content -Path $bodyPath -Raw -Encoding UTF8
 if ($bodyTemplate -match '\[A COMPLETER\]') {
     throw "Le texte $bodyPath contient encore le marqueur [A COMPLETER] : redige le contenu du mail avant de lancer la generation."
@@ -189,7 +126,8 @@ $issues = Get-Issues $Campagne   # contacts clos par le commercial (RDV, pas int
 for ($i = 0; $i -lt $contacts.Count; $i++) {
     $contact = $contacts[$i]
     $email = ([string]$contact.Email).Trim()
-    $sujetPropre = Resolve-Variables -Texte $contact.Sujet1 -Contact $contact
+    $sujets = Get-SujetsEtapes $contact
+    $sujetPropre = $sujets[1]
     $sujetSuffixe = Get-SujetAvecSuffixeInvisible -Sujet $sujetPropre -Index $i
 
     # Garde-fous : une ligne sans e-mail creerait un brouillon sans destinataire (a chaque lancement),
@@ -206,12 +144,17 @@ for ($i = 0; $i -lt $contacts.Count; $i++) {
         Write-Host "[$($contact.Nom)] colonne Sujet1 vide dans contacts.csv - ignore (rien n'est cree)."
         continue
     }
+    $ambigu = Test-SujetsAmbigus -SujetsEtapes $sujets -Etape 1
+    if ($ambigu) {
+        Write-Host "[$($contact.Nom)] $ambigu - ignore." -ForegroundColor Yellow
+        continue
+    }
 
-    if (Test-ExisteDeja -folderItems $sentItems -subjectPropre $sujetPropre -email $email) {
+    if (Test-ExisteDeja -Items $sentItems -SujetsEtapes $sujets -Etape 1 -Email $email) {
         Write-Host "[$($contact.Nom)] deja envoye - ignore."
         continue
     }
-    if (Test-ExisteDeja -folderItems $draftItems -subjectPropre $sujetPropre -email $email) {
+    if (Test-ExisteDeja -Items $draftItems -SujetsEtapes $sujets -Etape 1 -Email $email) {
         Write-Host "[$($contact.Nom)] brouillon deja existant - ignore."
         continue
     }

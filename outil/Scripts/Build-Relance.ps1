@@ -11,9 +11,11 @@
 #   - aucun mail n'a encore ete envoye pour lui dans ce fil (etape precedente introuvable)
 #   - le dernier mail envoye date de moins que le delai avant relance de la campagne
 #     (parametres.json, reglable dans l'interface ; 3 jours par defaut ; -MinJours pour forcer)
-#   - il a deja repondu manuellement (un mail de sa part est arrive dans la Boite de reception
-#     APRES le dernier mail envoye) -> dans ce cas la relance automatique s'arrete pour lui,
+#   - il a deja repondu manuellement (un mail de sa part est arrive dans la Boite de reception ou
+#     un de ses sous-dossiers APRES le dernier mail envoye ; les reponses automatiques, comme
+#     "absent du bureau", ne comptent pas) -> dans ce cas la relance automatique s'arrete pour lui,
 #     un humain doit reprendre la main.
+#   - l'objet de cette etape est identique a celui d'une autre etape (etapes indiscernables)
 #   - un Mail de cette etape (meme sujet = colonne SujetN, meme destinataire) existe deja en
 #     brouillon ou a deja ete envoye (evite les doublons si le script est relance plusieurs fois)
 #
@@ -44,32 +46,6 @@ $csvPath   = Join-Path $Campagne "contacts.csv"
 $bodyPath  = Join-Path $Campagne "Textes\Mail$Etape.txt"
 if (-not (Test-Path $csvPath)) { throw "Fichier introuvable : $csvPath" }
 
-function Convert-MarkdownLiteToHtml {
-    param([string[]]$lines)
-    $html = New-Object System.Collections.Generic.List[string]
-    $inList = $false
-    foreach ($rawLine in $lines) {
-        $line = $rawLine.TrimEnd()
-        if ($line.Trim() -eq "") {
-            if ($inList) { $html.Add('</ul>'); $inList = $false }
-            $html.Add("<br>")
-            continue
-        }
-        $escaped = $line -replace '&', '&amp;'
-        $escaped = [regex]::Replace($escaped, '\[([^\]]+)\]\(([^)]+)\)', '<a href="$2">$1</a>')
-        $escaped = [regex]::Replace($escaped, '\*\*(.+?)\*\*', '<strong>$1</strong>')
-        if ($escaped.TrimStart().StartsWith("- ")) {
-            if (-not $inList) { $html.Add('<ul style="margin:0 0 0 20px; padding:0;">'); $inList = $true }
-            $html.Add("<li>$($escaped.TrimStart().Substring(2))</li>")
-        } else {
-            if ($inList) { $html.Add('</ul>'); $inList = $false }
-            $html.Add("$escaped<br>")
-        }
-    }
-    if ($inList) { $html.Add('</ul>') }
-    return ($html -join "`r`n")
-}
-
 function Set-CorpsAvantSignature {
     # Insere $BodyHtml a la place des lignes vides qu'Outlook place avant la signature/citation
     # (evite l'espace en trop qu'on aurait en collant le texte devant tout le HTMLBody).
@@ -88,48 +64,12 @@ function Set-CorpsAvantSignature {
     }
 }
 
-function Resolve-Variables {
-    # Remplace les variables {{CIVILITE}}, {{PRENOM}}, {{NOM}}, {{ENTREPRISE}} par les valeurs du contact.
-    # Utilisable aussi bien sur le corps du mail que sur l'objet (colonnes SujetN).
-    param([string]$Texte, $Contact)
-    return $Texte `
-        -replace '\{\{CIVILITE\}\}', $Contact.Civilite `
-        -replace '\{\{PRENOM\}\}', $Contact.Prenom `
-        -replace '\{\{NOM\}\}', $Contact.Nom `
-        -replace '\{\{ENTREPRISE\}\}', $Contact.Entreprise
-}
-
-function Test-ExisteDeja {
-    # Comparaison "commence par" (et non egalite stricte) : compatible avec les mails crees avant
-    # l'ajout du suffixe invisible (qui n'en ont pas) et ceux crees depuis (qui en ont un).
-    param($folderItems, $subjectPropre, $email)
-    foreach ($item in $folderItems) {
-        if ($item.Class -ne 43) { continue }
-        if (-not $item.Subject.StartsWith($subjectPropre, [StringComparison]::Ordinal)) { continue }
-        if (Test-EnvoyeA -Item $item -Email $email) { return $true }   # adresse SMTP, meme en interne
-    }
-    return $false
-}
-
-function Get-SujetAvecSuffixeInvisible {
-    # Meme principe que dans Build-Mail1.ps1 : rend l'objet techniquement unique par contact
-    # (caracteres invisibles) pour qu'Outlook/Salesforce ne fusionnent pas tous les mails d'une
-    # meme vague dans un seul fil de conversation. L'indice doit rester stable d'une etape a
-    # l'autre : ne pas reordonner les lignes de contacts.csv en cours de campagne.
-    param([string]$Sujet, [int]$Index)
-    $zwsp = [char]0x200B
-    return $Sujet + ($zwsp.ToString() * ($Index + 1))
-}
-
 if (-not (Test-Path $bodyPath)) { throw "Fichier introuvable : $bodyPath" }
 $bodyTemplate = Get-Content -Path $bodyPath -Raw -Encoding UTF8
 if ($bodyTemplate -match '\[A COMPLETER\]') {
     throw "Le texte $bodyPath contient encore le marqueur [A COMPLETER] : redige le contenu du mail avant de lancer la generation."
 }
 $contacts = @(Import-Csv -Path $csvPath -Delimiter ';' -Encoding UTF8)  # @() force un tableau meme avec 1 seule ligne
-
-# objets valides pour l'etape precedente (celle qu'on doit trouver envoyee pour pouvoir repondre)
-$colonnesPrecedentes = 1..($Etape - 1) | ForEach-Object { "Sujet$_" }
 
 Write-Host "Connexion a Outlook..."
 try {
@@ -139,18 +79,19 @@ try {
 }
 $ns = $outlook.GetNamespace("MAPI")
 
-# Seuls les mails dont l'objet commence par un Sujet1..SujetN de la campagne sont lus (filtre fait par
-# Outlook : bien plus rapide que de parcourir tout le dossier Elements envoyes pour chaque contact)
-$prefixes = @(foreach ($c in $contacts) { foreach ($n in 1..$Etape) { Resolve-Variables -Texte $c."Sujet$n" -Contact $c } })
+# Seuls les mails dont l'objet commence par un Sujet1..Sujet4 de la campagne sont lus (filtre fait par
+# Outlook : bien plus rapide que de parcourir tout le dossier Elements envoyes pour chaque contact).
+# Les 4 etapes sont lues pour attribuer chaque mail a la bonne etape (prefixe le plus long).
+$prefixes = @(foreach ($c in $contacts) { foreach ($n in 1..4) { Resolve-Variables -Texte $c."Sujet$n" -Contact $c } })
 $sentItems = @(Get-ItemsParObjet -Folder $ns.GetDefaultFolder(5) -Prefixes $prefixes |
     Sort-Object -Property SentOn -Descending)   # olFolderSentMail, plus recent en premier
 
 $draftItems = Get-ItemsParObjet -Folder $ns.GetDefaultFolder(16) -Prefixes $prefixes  # olFolderDrafts
 
-# Boite de reception : seuls les mails venant des contacts de la campagne (filtre Outlook) sont lus,
-# au lieu de reparcourir toute la boite pour chaque contact.
-$inboxItems = @(Get-ItemsParExpediteur -Folder $ns.GetDefaultFolder(6) -Adresses @($contacts | ForEach-Object { $_.Email }) -Depuis (Get-Date).AddYears(-1) |
-    Sort-Object -Property ReceivedTime -Descending)   # olFolderInbox
+# Reponses : mails venant des contacts de la campagne (filtre Outlook), dans la Boite de reception ET ses
+# sous-dossiers (une regle peut y ranger une reponse), reponses automatiques (absence...) exclues.
+$inboxItems = @(Get-ReponsesRecues -Namespace $ns -Adresses @($contacts | ForEach-Object { $_.Email }) -Depuis (Get-Date).AddYears(-1) |
+    Sort-Object -Property ReceivedTime -Descending)
 
 $seuilDate = (Get-Date).AddDays(-$MinJours)
 $mesAdresses = Get-MesAdresses -Namespace $ns
@@ -158,7 +99,8 @@ $issues = Get-Issues $Campagne   # contacts clos par le commercial (RDV, pas int
 
 for ($i = 0; $i -lt $contacts.Count; $i++) {
     $contact = $contacts[$i]
-    $sujetPropre = Resolve-Variables -Texte $contact."Sujet$Etape" -Contact $contact
+    $sujets = Get-SujetsEtapes $contact
+    $sujetPropre = $sujets[$Etape]
 
     $cle = ([string]$contact.Email).Trim().ToLower()
     if ($cle -and $issues.ContainsKey($cle)) {
@@ -175,31 +117,32 @@ for ($i = 0; $i -lt $contacts.Count; $i++) {
 
     $sujetSuffixe = Get-SujetAvecSuffixeInvisible -Sujet $sujetPropre -Index $i
 
-    # Les sujets vides sont ecartes ici aussi : ils matcheraient tous les mails du dossier Envoyes.
-    $sujetsPrecedentsPropres = @($colonnesPrecedentes |
-        ForEach-Object { Resolve-Variables -Texte $contact.$_ -Contact $contact } |
-        Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-    if ($sujetsPrecedentsPropres.Count -eq 0) {
+    # Deux etapes de meme objet : impossible de savoir laquelle a ete envoyee
+    $ambigu = Test-SujetsAmbigus -SujetsEtapes $sujets -Etape $Etape
+    if ($ambigu) {
+        Write-Host "[$($contact.Nom)] Mail$Etape : $ambigu - ignore." -ForegroundColor Yellow
+        continue
+    }
+    if (-not @(1..($Etape - 1) | Where-Object { -not [string]::IsNullOrWhiteSpace($sujets[$_]) })) {
         Write-Host "[$($contact.Nom)] aucun sujet d'etape precedente renseigne dans contacts.csv - ignore."
         continue
     }
 
-    if (Test-ExisteDeja -folderItems $sentItems -subjectPropre $sujetPropre -email $contact.Email) {
+    if (Test-ExisteDeja -Items $sentItems -SujetsEtapes $sujets -Etape $Etape -Email $contact.Email) {
         Write-Host "[$($contact.Nom)] Mail$Etape deja envoye - ignore."
         continue
     }
-    if (Test-ExisteDeja -folderItems $draftItems -subjectPropre $sujetPropre -email $contact.Email) {
+    if (Test-ExisteDeja -Items $draftItems -SujetsEtapes $sujets -Etape $Etape -Email $contact.Email) {
         Write-Host "[$($contact.Nom)] brouillon Mail$Etape deja existant - ignore."
         continue
     }
 
-    # 1) dernier mail envoye a ce contact dans ce fil (etape precedente)
+    # 1) dernier mail envoye a ce contact dans ce fil (une etape precedente, reconnue a son objet)
     $dernierEnvoye = $null
     foreach ($item in $sentItems) {
         if ($item.Class -ne 43) { continue }
-        $matchSujet = $false
-        foreach ($sp in $sujetsPrecedentsPropres) { if ($item.Subject.StartsWith($sp, [StringComparison]::Ordinal)) { $matchSujet = $true; break } }
-        if (-not $matchSujet) { continue }
+        $n = Get-EtapeDuSujet -Sujet $item.Subject -SujetsEtapes $sujets
+        if ($n -lt 1 -or $n -ge $Etape) { continue }
         if (-not (Test-EnvoyeA -Item $item -Email $contact.Email)) { continue }
         $dernierEnvoye = $item
         break
@@ -240,9 +183,15 @@ for ($i = 0; $i -lt $contacts.Count; $i++) {
     # .Reply() adresse toujours la reponse a l'EXPEDITEUR du mail source. Ici le mail source vient
     # des Elements envoyes : son expediteur, c'est nous. Sans cette correction, la relance part
     # vers soi-meme au lieu du prospect. On vide donc les destinataires et on remet le contact.
+    # Recipients.Add + Resolve() (comme Build-Mail1.ps1) plutot que $reply.To = ... : l'adresse est
+    # validee comme si on la tapait a la main, et on previent si Outlook ne la reconnait pas.
     while ($reply.Recipients.Count -gt 0) { $reply.Recipients.Remove(1) }
-    $reply.To = $contact.Email
-    [void]$reply.Recipients.ResolveAll()
+    $email = ([string]$contact.Email).Trim()
+    $recip = $reply.Recipients.Add($email)
+    $recip.Type = 1  # olTo
+    if (-not $recip.Resolve()) {
+        Write-Host "[$($contact.Nom)] ATTENTION : Outlook n'a pas pu valider l'adresse '$email' - verifie-la dans le brouillon." -ForegroundColor Yellow
+    }
 
     $reply.Subject = $sujetSuffixe
     Set-CorpsAvantSignature -MailItem $reply -BodyHtml $relanceHtml

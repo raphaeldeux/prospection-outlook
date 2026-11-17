@@ -7,12 +7,13 @@
 #   - envoi    = mail du dossier Elements envoyes dont l'objet commence par la colonne SujetN
 #                (variables resolues) et adresse au contact
 #   - brouillon = idem dans le dossier Brouillons
-#   - reponse  = mail recu en Boite de reception de l'adresse du contact, APRES le 1er envoi
+#   - reponse  = mail recu (Boite de reception ou un de ses sous-dossiers) de l'adresse du contact,
+#                APRES le 1er envoi ; les reponses automatiques (absence...) ne comptent pas
 #
 # Usage : double-cliquer "Suivi des campagnes.bat" a la racine du dossier Prospection.
 #   .\Suivi-Campagnes.ps1                         # toutes les campagnes (sauf _Modele campagne)
 #   .\Suivi-Campagnes.ps1 -Campagne "<dossier>"   # une seule campagne
-#   .\Suivi-Campagnes.ps1 -JoursHistorique 365    # chercher plus loin dans le passe
+#   .\Suivi-Campagnes.ps1 -JoursHistorique 730    # chercher les reponses plus loin
 
 param(
     [string]$Campagne,
@@ -21,8 +22,9 @@ param(
     # defaut) ; une valeur >= 0 l'impose a toutes les campagnes
     [int]$MinJours = -1,
 
-    # profondeur de recherche dans Outlook (on s'arrete aux mails plus anciens, pour aller vite)
-    [int]$JoursHistorique = 180,
+    # profondeur de recherche des REPONSES (les envois et brouillons sont lus sans limite de date :
+    # le filtre par objet suffit a aller vite)
+    [int]$JoursHistorique = 365,
 
     # ne pas ouvrir le rapport HTML a la fin
     [switch]$SansRapport,
@@ -46,41 +48,15 @@ if ($Campagne) {
 }
 if ($dossiers.Count -eq 0) { throw "Aucune campagne trouvee." }
 
-function Resolve-Variables {
-    # Meme logique que Build-Mail1.ps1 / Build-Relance.ps1
-    param([string]$Texte, $Contact)
-    return $Texte `
-        -replace '\{\{CIVILITE\}\}', $Contact.Civilite `
-        -replace '\{\{PRENOM\}\}', $Contact.Prenom `
-        -replace '\{\{NOM\}\}', $Contact.Nom `
-        -replace '\{\{ENTREPRISE\}\}', $Contact.Entreprise
-}
-
 function Get-IndexParAdresse {
-    # Parcourt UNE SEULE FOIS un dossier Outlook (du plus recent au plus ancien, jusqu'a $Limite) et
-    # range les mails par adresse destinataire (ou expediteur si -ParExpediteur). Bien plus rapide que
-    # de reparcourir tout le dossier pour chaque contact.
-    # Avec -Prefixes, seuls les mails dont l'objet commence par l'un d'eux sont lus (filtre fait par
-    # Outlook, beaucoup plus rapide : lire les destinataires de tous les mails envoyes prend ~1 min).
-    param($Folder, [string]$ChampDate, [datetime]$Limite, [switch]$ParExpediteur, [string[]]$Prefixes, [string[]]$Expediteurs)
+    # Range des mails Outlook par adresse destinataire (ou expediteur si -ParExpediteur), pour retrouver
+    # ensuite ceux d'un contact sans reparcourir les dossiers. Les mails sont deja filtres par Outlook
+    # (objet ou expediteur, cf. Commun.ps1), ce qui evite de lire tout le dossier.
+    param($Items, [string]$ChampDate, [switch]$ParExpediteur)
     $index = @{}
-    if ($Prefixes) {
-        $items = Get-ItemsParObjet -Folder $Folder -Prefixes $Prefixes
-        $trie = $false
-    } elseif ($Expediteurs) {
-        $items = Get-ItemsParExpediteur -Folder $Folder -Adresses $Expediteurs -Depuis $Limite
-        $trie = $false
-    } else {
-        $items = $Folder.Items
-        $items.Sort("[$ChampDate]", $true)
-        $trie = $true
-    }
-    foreach ($item in $items) {
+    foreach ($item in $Items) {
         if ($item.Class -ne 43) { continue }
         $date = $item.$ChampDate
-        # les brouillons n'ont pas de date d'envoi (annee 4501) : on ne les filtre pas sur la date
-        if ($date -and $date.Year -lt 4000 -and $date -lt $Limite) { if ($trie) { break } else { continue } }
-        $adresses = @()
         # adresses SMTP, y compris pour les personnes de la meme organisation (cf. Commun.ps1)
         if ($ParExpediteur) {
             $adresses = @(Get-AdresseExpediteur $item)
@@ -94,19 +70,6 @@ function Get-IndexParAdresse {
         }
     }
     return $index
-}
-
-function Get-EtapeDuSujet {
-    # Renvoie l'etape (1-4) dont le sujet correspond le mieux (prefixe le plus long), 0 sinon.
-    # Le "plus long" evite qu'un Sujet1 qui serait le debut d'un Sujet2 capte les mails de l'etape 2.
-    param([string]$Sujet, [string[]]$SujetsEtapes)
-    $meilleure = 0; $longueur = -1
-    for ($n = 1; $n -le 4; $n++) {
-        $s = $SujetsEtapes[$n]
-        if ([string]::IsNullOrWhiteSpace($s)) { continue }
-        if ($Sujet.StartsWith($s, [StringComparison]::Ordinal) -and $s.Length -gt $longueur) { $meilleure = $n; $longueur = $s.Length }
-    }
-    return $meilleure
 }
 
 function Format-Date { param($d) if ($d) { $d.ToString("dd/MM/yyyy") } else { "" } }
@@ -127,15 +90,15 @@ $prefixes = @(foreach ($dossier in $dossiers) {
     }
 }) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
 
-Write-Host "Lecture des Elements envoyes ($JoursHistorique derniers jours)..."
-$envoyes = if ($prefixes) { Get-IndexParAdresse -Folder $ns.GetDefaultFolder(5) -ChampDate "SentOn" -Limite $limite -Prefixes $prefixes } else { @{} }
+Write-Host "Lecture des Elements envoyes..."
+$envoyes = if ($prefixes) { Get-IndexParAdresse -Items (Get-ItemsParObjet -Folder $ns.GetDefaultFolder(5) -Prefixes $prefixes) -ChampDate "SentOn" } else { @{} }
 Write-Host "Lecture des Brouillons..."
-$brouillons = if ($prefixes) { Get-IndexParAdresse -Folder $ns.GetDefaultFolder(16) -ChampDate "LastModificationTime" -Limite $limite -Prefixes $prefixes } else { @{} }
-Write-Host "Lecture de la Boite de reception..."
+$brouillons = if ($prefixes) { Get-IndexParAdresse -Items (Get-ItemsParObjet -Folder $ns.GetDefaultFolder(16) -Prefixes $prefixes) -ChampDate "LastModificationTime" } else { @{} }
+Write-Host "Lecture des reponses (Boite de reception et sous-dossiers, $JoursHistorique derniers jours)..."
 $adresses = @(foreach ($dossier in $dossiers) {
     Import-Csv -Path (Join-Path $dossier.FullName "contacts.csv") -Delimiter ';' -Encoding UTF8 | ForEach-Object { $_.Email }
 })
-$recus = if ($adresses) { Get-IndexParAdresse -Folder $ns.GetDefaultFolder(6) -ChampDate "ReceivedTime" -Limite $limite -ParExpediteur -Expediteurs $adresses } else { @{} }
+$recus = if ($adresses) { Get-IndexParAdresse -Items (Get-ReponsesRecues -Namespace $ns -Adresses $adresses -Depuis $limite) -ChampDate "ReceivedTime" -ParExpediteur } else { @{} }
 
 $aujourdhui = (Get-Date).Date
 $resultats = New-Object System.Collections.Generic.List[object]
@@ -151,7 +114,7 @@ foreach ($dossier in $dossiers) {
         # lignes vides du CSV (ex. lignes ajoutees par Excel en fin de fichier)
         if ([string]::IsNullOrWhiteSpace($contact.Nom) -and [string]::IsNullOrWhiteSpace($contact.Email)) { continue }
         $email = ([string]$contact.Email).Trim().ToLower()
-        $sujets = @($null) + @(1..4 | ForEach-Object { Resolve-Variables -Texte $contact."Sujet$_" -Contact $contact })
+        $sujets = Get-SujetsEtapes $contact
         $nbEtapes = @(1..4 | Where-Object { -not [string]::IsNullOrWhiteSpace($sujets[$_]) }).Count
 
         # date du 1er envoi de chaque etape (si le mail a ete renvoye, on garde le premier)

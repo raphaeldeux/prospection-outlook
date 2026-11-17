@@ -50,7 +50,7 @@ Colonnes : Civilite ; Nom ; Entreprise ; Telephone ; Email ; Sujet1 ; Sujet2 ; S
    - Sujet1 a Sujet4 = l'objet de chacun des 4 mails (un objet different par etape).
    - Les variables {{CIVILITE}}, {{NOM}} et {{ENTREPRISE}} fonctionnent dans l'objet ET dans
      le corps du mail. Exemple d'objet :
-        [{{ENTREPRISE}} / Wavestone] Discutons cybersecurite x IA
+        [{{ENTREPRISE}}] Discutons cybersecurite x IA
 
 ATTENTION ENCODAGE : le fichier est en UTF-8 avec BOM pour qu'Excel affiche et re-enregistre
 correctement les accents. Si tu le recrees a la main, garde ce format (Excel : "CSV UTF-8"),
