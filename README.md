@@ -7,11 +7,15 @@ L'outil prépare des **brouillons** dans Outlook, avec ta signature. **Rien n'es
 Tout se fait depuis une interface web locale :
 
 - création des campagnes ;
-- saisie des contacts (ou collage depuis Excel) et des objets de mail ;
+- saisie des contacts (ou collage depuis Excel ou Outlook) et des objets de mail ;
 - rédaction des 4 mails, avec aperçu ;
-- suivi contact par contact (mails envoyés, réponses, relance possible) ;
+- **objet et texte personnalisés** pour un contact précis, à n'importe quelle étape ;
+- suivi contact par contact : mails envoyés, réponses, relance possible ;
 - création des brouillons en un clic ;
+- mise à jour de l'outil en un clic (page Paramètres) ;
 - guide d'utilisation intégré.
+
+Les relances s'arrêtent d'elles-mêmes pour un contact qui a répondu. Les réponses sont cherchées dans la Boîte de réception et ses sous-dossiers, et les réponses automatiques (absence du bureau…) sont ignorées.
 
 ## Aperçu
 
@@ -38,17 +42,27 @@ Prérequis : Windows et **Outlook classique** (pas le « nouvel Outlook »), ave
 L'installeur :
 
 - vérifie les prérequis : Outlook classique et signature ;
-- télécharge la dernière version depuis ce dépôt ;
+- télécharge la **dernière version publiée** (la dernière [Release](https://github.com/raphaeldeux/prospection-outlook/releases)), jamais un travail en cours ;
 - la copie dans ton dossier ;
 - crée les raccourcis sur le Bureau et dans le menu Démarrer.
 
-**Mettre à jour** : double-clique `Installer ou mettre a jour.bat` dans ton dossier Prospection, ou relance un `Installer.bat` fraîchement téléchargé : il retrouve tout seul ton dossier d'installation, même s'il ne s'agit pas du dossier par défaut. Tes campagnes, dans `Campagnes\`, ne sont jamais modifiées : seule la campagne modèle `_Modele campagne` est remplacée.
+**Mettre à jour** : dans l'interface, **Paramètres → Mettre à jour**. La page se recharge toute seule sur la nouvelle version. Tu peux aussi double-cliquer `Installer ou mettre a jour.bat` dans ton dossier Prospection, ou relancer un `Installer.bat` fraîchement téléchargé : il retrouve tout seul ton dossier d'installation, même s'il ne s'agit pas du dossier par défaut. Tes campagnes, dans `Campagnes\`, ne sont jamais modifiées : seule la campagne modèle `_Modele campagne` est remplacée.
 
 **Sans l'installeur** : clique sur *Code > Download ZIP* et copie le contenu du dossier `outil` où tu veux.
 
 ## Confidentialité
 
-Tes campagnes (contacts, textes) restent sur ton poste, dans `Campagnes\`. L'interface ne fonctionne qu'en local (`http://localhost:8765`), et aucune donnée n'est envoyée ailleurs. Ne publie jamais ton dossier `Campagnes\` : le `.gitignore` du dépôt l'exclut.
+Tes campagnes (contacts, textes) restent sur ton poste, dans `Campagnes\`. L'interface ne fonctionne qu'en local (`http://localhost:8765`), et aucune donnée n'est envoyée ailleurs. La seule connexion sortante consulte GitHub pour connaître la dernière version publiée. Ne publie jamais ton dossier `Campagnes\` : le `.gitignore` du dépôt l'exclut.
+
+Chaque campagne est un dossier de `Campagnes\` :
+
+```
+contacts.csv              contacts et objets des 4 mails (colonnes Sujet1 à Sujet4)
+Textes\Mail1.txt … Mail4.txt   textes communs
+Textes\personnalises.json      textes propres à certains contacts (par adresse e-mail)
+issues.json               issue de chaque contact clos (RDV obtenu, pas intéressé…)
+parametres.json           délai avant relance
+```
 
 ## Organisation du dépôt
 
@@ -82,6 +96,18 @@ cd ..
 powershell -File Deployer.ps1 -Cible "C:\chemin\vers\ton\dossier\Prospection"
 ```
 
-Pour publier une nouvelle version de l'installeur, ajoute `Installer.bat` comme fichier joint d'une Release GitHub. Le lien `releases/latest/download/Installer.bat` pointe toujours sur la dernière Release.
+`Deployer.ps1` écrit dans `version.txt` le dernier tag de release, suivi de `+local` si `outil/` a changé depuis.
+
+### Publier une version
+
+Les utilisateurs n'installent que les **Releases** : un commit sur `main` ne leur parvient qu'à la publication de la release suivante.
+
+1. Compile l'interface (`npm run build`), commite et pousse sur `main`.
+2. Crée la release avec un tag `vX.Y.Z` et des notes de version lisibles par les utilisateurs : elles s'affichent dans la page Paramètres de l'interface.
+3. **Joins `Installer.bat` à la release** : le lien de téléchargement de ce README (`releases/latest/download/Installer.bat`) pointe sur le fichier joint de la dernière release.
+
+```bat
+gh release create vX.Y.Z Installer.bat --target main --title "Prospection Outlook X.Y.Z" --notes-file notes.md
+```
 
 Pense à mettre à jour le guide intégré (`interface/src/Guide.tsx`) quand un comportement change.
