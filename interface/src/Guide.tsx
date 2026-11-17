@@ -127,8 +127,8 @@ export function Guide() {
           </table>
         </div>
         <p>
-          <strong>Objets :</strong> en général identiques pour tous. Saisis-les dans le bloc « Objets des mails » puis clique
-          « Appliquer à tous ». Les variables <Code>{"{{CIVILITE}}"}</Code>, <Code>{"{{NOM}}"}</Code> et{" "}
+          <strong>Objets :</strong> en général identiques pour tous. Saisis-les dans le bloc « Objets des mails » : ils
+          s'appliquent directement à tous les contacts. Les variables <Code>{"{{CIVILITE}}"}</Code>, <Code>{"{{NOM}}"}</Code> et{" "}
           <Code>{"{{ENTREPRISE}}"}</Code> sont remplacées pour chaque contact, par exemple{" "}
           <Code>{"[{{ENTREPRISE}} / Wavestone] Discutons cybersécurité"}</Code>. Un objet vide arrête la séquence à cette étape
           pour ce contact.
@@ -137,7 +137,10 @@ export function Guide() {
           <strong>Coller depuis Excel :</strong> sélectionne tes lignes dans Excel (colonnes dans l'ordre Civilité, Nom,
           Entreprise, Téléphone, E-mail), copie, puis « Coller depuis Excel ». Les contacts sont ajoutés en fin de liste.
         </p>
-        <p>N'oublie pas d'<strong>enregistrer</strong> : un point orange signale des modifications en attente.</p>
+        <p>
+          Tant que des modifications ne sont pas enregistrées, une barre « Modifications non enregistrées » reste affichée en
+          bas de l'écran : clique sur <strong>Enregistrer</strong>.
+        </p>
         <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
           <p className="font-medium">Deux règles importantes une fois la campagne lancée</p>
           <ul className="mt-1 list-disc space-y-1 pl-5">

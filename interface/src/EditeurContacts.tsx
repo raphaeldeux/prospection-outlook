@@ -108,9 +108,25 @@ export function EditeurContacts(props: {
   const modifier = (i: number, col: string, v: string) =>
     setLignes((ls) => ls.map((l, j) => (j === i ? { ...l, [col]: v } : l)))
 
+  /** Objet commun d'une étape : appliqué tout de suite aux contacts qui avaient l'objet commun ou aucun objet */
+  function changerObjet(n: number, valeur: string) {
+    const col = `Sujet${n}`
+    const ancien = objets[n - 1]
+    setObjets((o) => o.map((x, k) => (k === n - 1 ? valeur : x)))
+    setLignes((ls) => ls.map((l) => ((l[col] ?? "") === ancien || !(l[col] ?? "") ? { ...l, [col]: valeur } : l)))
+  }
+
+  /** Force l'objet commun aussi sur les contacts qui avaient un objet personnalisé */
   function appliquerObjet(n: number) {
     setLignes((ls) => ls.map((l) => ({ ...l, [`Sujet${n}`]: objets[n - 1] })))
-    toast.success(`Objet Mail${n} appliqué à ${lignes.length} contact(s)`)
+  }
+
+  const personnalises = (n: number) => lignes.filter((l) => (l[`Sujet${n}`] ?? "") !== objets[n - 1]).length
+
+  function annuler() {
+    const ref: LigneContact[] = JSON.parse(reference)
+    setLignes(ref)
+    setObjets([1, 2, 3, 4].map((n) => plusFrequent(ref.map((c) => c[`Sujet${n}`] ?? ""))))
   }
 
   function coller(texte: string) {
@@ -158,8 +174,8 @@ export function EditeurContacts(props: {
         <CardHeader>
           <CardTitle className="text-sm">Objets des mails</CardTitle>
           <CardDescription>
-            Le même objet pour tous les contacts, en général. Les variables {"{{CIVILITE}}"}, {"{{NOM}}"} et {"{{ENTREPRISE}}"}{" "}
-            sont remplacées pour chaque contact. Un objet vide arrête la séquence à cette étape.
+            L'objet saisi ici s'applique directement à tous les contacts. Les variables {"{{CIVILITE}}"}, {"{{NOM}}"} et{" "}
+            {"{{ENTREPRISE}}"} sont remplacées pour chaque contact. Un objet vide arrête la séquence à cette étape.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
@@ -169,29 +185,46 @@ export function EditeurContacts(props: {
               Des mails sont déjà partis : ne modifie pas l'objet d'une étape déjà envoyée, le suivi ne retrouverait plus ces mails.
             </p>
           )}
-          {[1, 2, 3, 4].map((n) => (
-            <div key={n} className="flex items-center gap-2">
-              <span className="w-24 shrink-0 text-xs text-muted-foreground">Mail{n}</span>
-              <Input
-                value={objets[n - 1]}
-                onChange={(e) => setObjets((o) => o.map((x, k) => (k === n - 1 ? e.target.value : x)))}
-                placeholder={n === 1 ? "[{{ENTREPRISE}} / Wavestone] Échangeons sur vos priorités" : "Laisser vide pour ne pas faire cette relance"}
-              />
-              <Button size="sm" variant="outline" onClick={() => appliquerObjet(n)} disabled={lignes.length === 0}>
-                Appliquer à tous
-              </Button>
-            </div>
-          ))}
+          {[1, 2, 3, 4].map((n) => {
+            const autres = personnalises(n)
+            // Le suivi reconnait une etape a l'objet du mail : un objet identique a celui d'une etape
+            // precedente (ou qui en est le debut) rendrait les deux mails indiscernables.
+            const objet = objets[n - 1].trim()
+            const conflit = objet
+              ? [1, 2, 3, 4].find((m) => m < n && objets[m - 1].trim() && objets[m - 1].trim().startsWith(objet))
+              : undefined
+            return (
+              <div key={n} className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="w-24 shrink-0 text-xs text-muted-foreground">Mail{n}</span>
+                <Input
+                  className="min-w-0 flex-1"
+                  value={objets[n - 1]}
+                  onChange={(e) => changerObjet(n, e.target.value)}
+                  aria-invalid={conflit ? true : undefined}
+                  placeholder={n === 1 ? "[{{ENTREPRISE}} / Wavestone] Échangeons sur vos priorités" : "Laisser vide pour ne pas faire cette relance"}
+                />
+                {conflit && (
+                  <span className="w-full pl-26 text-xs text-destructive">
+                    {objets[conflit - 1].trim() === objet ? "Identique à" : "Correspond au début de"} l'objet Mail{conflit} : l'outil
+                    ne pourrait pas distinguer les deux mails (le Mail{n} serait considéré comme déjà envoyé). Donne-lui un objet
+                    différent, par exemple en ajoutant « Re: » devant.
+                  </span>
+                )}
+                {autres > 0 && lignes.length > 0 && (
+                  <span className="w-full pl-26 text-xs text-muted-foreground">
+                    {autres} contact(s) ont un autre objet pour Mail{n}.{" "}
+                    <button className="underline underline-offset-2 hover:text-foreground" onClick={() => appliquerObjet(n)}>
+                      Leur appliquer celui-ci
+                    </button>
+                  </span>
+                )}
+              </div>
+            )
+          })}
         </CardContent>
       </Card>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button onClick={() => enregistrer()} disabled={!modifie || sauvegarde}>
-          {sauvegarde ? <Loader2Icon className="animate-spin" /> : <SaveIcon />} Enregistrer
-        </Button>
-        <Button variant="ghost" disabled={!modifie} onClick={() => setLignes(JSON.parse(reference))}>
-          <Undo2Icon /> Annuler les modifications
-        </Button>
         <div className="flex-1" />
         <Button variant="outline" onClick={() => setCollage("")}><ClipboardPasteIcon /> Coller depuis Excel</Button>
         <Button variant="outline" onClick={() => setLignes((ls) => [...ls, { ...ligneVide(colonnes), ...Object.fromEntries(objets.map((o, k) => [`Sujet${k + 1}`, o])) }])}>
@@ -225,8 +258,8 @@ export function EditeurContacts(props: {
             ))}
           </ul>
           <p className="mt-1">
-            Pour écrire à une autre personne, ajoute plutôt un nouveau contact en fin de liste. Sinon, « Annuler les
-            modifications ».
+            Pour écrire à une autre personne, ajoute plutôt un nouveau contact en fin de liste. Sinon, clique sur « Annuler » dans la barre
+            du bas.
           </p>
         </div>
       )}
@@ -300,6 +333,22 @@ export function EditeurContacts(props: {
         Ajoute les nouveaux contacts en fin de liste et ne réordonne pas les lignes d'une campagne lancée : l'objet de chaque mail
         dépend de la position du contact.
       </p>
+
+      {/* Barre d'enregistrement : reste visible en bas de l'écran tant qu'il y a des modifications */}
+      {modifie && (
+        <div className="sticky bottom-0 z-10 -mx-6 -mb-6 flex flex-wrap items-center gap-3 border-t bg-background/95 px-6 py-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)] backdrop-blur">
+          <span className="flex items-center gap-2 text-sm font-medium">
+            <span className="size-2 rounded-full bg-amber-500" /> Modifications non enregistrées
+          </span>
+          <div className="flex-1" />
+          <Button variant="ghost" onClick={annuler} disabled={sauvegarde}>
+            <Undo2Icon /> Annuler
+          </Button>
+          <Button onClick={() => enregistrer()} disabled={sauvegarde}>
+            {sauvegarde ? <Loader2Icon className="animate-spin" /> : <SaveIcon />} Enregistrer
+          </Button>
+        </div>
+      )}
 
       <AlertDialog open={aSupprimer !== null} onOpenChange={(o) => !o && setASupprimer(null)}>
         <AlertDialogContent>
