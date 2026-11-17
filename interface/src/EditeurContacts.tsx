@@ -1,0 +1,291 @@
+import { useEffect, useMemo, useState } from "react"
+import { ClipboardPasteIcon, Loader2Icon, PlusIcon, SaveIcon, Trash2Icon, TriangleAlertIcon, Undo2Icon } from "lucide-react"
+import { toast } from "sonner"
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { enregistrerContacts, type LigneContact } from "@/lib/api"
+import { estEmailValide } from "@/lib/apercu"
+import { cn } from "@/lib/utils"
+
+const ordreCollage = ["Civilite", "Nom", "Entreprise", "Telephone", "Email", "Sujet1", "Sujet2", "Sujet3", "Sujet4"]
+const libelleColonne: Record<string, string> = {
+  Civilite: "Civilité",
+  Nom: "Nom",
+  Entreprise: "Entreprise",
+  Telephone: "Téléphone",
+  Email: "E-mail",
+  Sujet1: "Objet Mail1",
+  Sujet2: "Objet Mail2",
+  Sujet3: "Objet Mail3",
+  Sujet4: "Objet Mail4",
+}
+const largeur: Record<string, string> = {
+  Civilite: "w-28",
+  Nom: "w-40",
+  Entreprise: "w-44",
+  Telephone: "w-32",
+  Email: "w-64",
+}
+
+const ligneVide = (colonnes: string[]): LigneContact => Object.fromEntries(colonnes.map((c) => [c, ""]))
+const plusFrequent = (valeurs: string[]) => {
+  const n = new Map<string, number>()
+  valeurs.filter(Boolean).forEach((v) => n.set(v, (n.get(v) ?? 0) + 1))
+  return [...n.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? ""
+}
+
+export function EditeurContacts(props: {
+  campagne: string
+  colonnes: string[]
+  contacts: LigneContact[]
+  campagneDemarree: boolean
+  onEnregistre: () => void
+  onModifie: (modifie: boolean) => void
+}) {
+  const { colonnes, campagneDemarree } = props
+  const [lignes, setLignes] = useState<LigneContact[]>(props.contacts)
+  const [reference, setReference] = useState(JSON.stringify(props.contacts))
+  const [sauvegarde, setSauvegarde] = useState(false)
+  const [aSupprimer, setASupprimer] = useState<number | null>(null)
+  const [collage, setCollage] = useState<string | null>(null)
+  const [objets, setObjets] = useState<string[]>(() =>
+    [1, 2, 3, 4].map((n) => plusFrequent(props.contacts.map((c) => c[`Sujet${n}`] ?? ""))),
+  )
+
+  const modifie = JSON.stringify(lignes) !== reference
+  useEffect(() => props.onModifie(modifie), [modifie]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const erreurs = useMemo(
+    () => lignes.map((l) => (l.Nom || l.Email || l.Sujet1 ? !estEmailValide(l.Email ?? "") : false)),
+    [lignes],
+  )
+  const nbErreurs = erreurs.filter(Boolean).length
+  const doublons = useMemo(() => {
+    const vus = new Map<string, number>()
+    lignes.forEach((l) => l.Email && vus.set(l.Email.trim().toLowerCase(), (vus.get(l.Email.trim().toLowerCase()) ?? 0) + 1))
+    return new Set([...vus.entries()].filter(([, n]) => n > 1).map(([e]) => e))
+  }, [lignes])
+
+  const modifier = (i: number, col: string, v: string) =>
+    setLignes((ls) => ls.map((l, j) => (j === i ? { ...l, [col]: v } : l)))
+
+  function appliquerObjet(n: number) {
+    setLignes((ls) => ls.map((l) => ({ ...l, [`Sujet${n}`]: objets[n - 1] })))
+    toast.success(`Objet Mail${n} appliqué à ${lignes.length} contact(s)`)
+  }
+
+  function coller(texte: string) {
+    const nouvelles = texte
+      .split(/\r?\n/)
+      .filter((l) => l.trim())
+      .map((l) => l.split(l.includes("\t") ? "\t" : ";").map((v) => v.trim()))
+      .filter((v) => !(v[0]?.toLowerCase().startsWith("civilit") && v[1]?.toLowerCase() === "nom")) // en-tête ignorée
+      .map((v) => {
+        const l = ligneVide(colonnes)
+        ordreCollage.forEach((c, k) => (l[c] = v[k] ?? ""))
+        // objets vides : on reprend les objets communs
+        ;[1, 2, 3, 4].forEach((n) => !l[`Sujet${n}`] && (l[`Sujet${n}`] = objets[n - 1]))
+        return l
+      })
+    setLignes((ls) => [...ls, ...nouvelles])
+    setCollage(null)
+    toast.success(`${nouvelles.length} contact(s) ajouté(s) en fin de liste. Pense à enregistrer.`)
+  }
+
+  async function enregistrer() {
+    setSauvegarde(true)
+    try {
+      const r = await enregistrerContacts(props.campagne, colonnes, lignes)
+      const propres = lignes.filter((l) => Object.values(l).some((v) => v.trim()))
+      setLignes(propres)
+      setReference(JSON.stringify(propres))
+      toast.success(`${r.nb} contact(s) enregistré(s)`)
+      props.onEnregistre()
+    } catch (e) {
+      toast.error((e as Error).message)
+    } finally {
+      setSauvegarde(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card size="sm">
+        <CardHeader>
+          <CardTitle className="text-sm">Objets des mails</CardTitle>
+          <CardDescription>
+            Le même objet pour tous les contacts, en général. Les variables {"{{CIVILITE}}"}, {"{{NOM}}"} et {"{{ENTREPRISE}}"}{" "}
+            sont remplacées pour chaque contact. Un objet vide arrête la séquence à cette étape.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {campagneDemarree && (
+            <p className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300">
+              <TriangleAlertIcon className="mt-0.5 size-3.5 shrink-0" />
+              Des mails sont déjà partis : ne modifie pas l'objet d'une étape déjà envoyée, le suivi ne retrouverait plus ces mails.
+            </p>
+          )}
+          {[1, 2, 3, 4].map((n) => (
+            <div key={n} className="flex items-center gap-2">
+              <span className="w-24 shrink-0 text-xs text-muted-foreground">Mail{n}</span>
+              <Input
+                value={objets[n - 1]}
+                onChange={(e) => setObjets((o) => o.map((x, k) => (k === n - 1 ? e.target.value : x)))}
+                placeholder={n === 1 ? "[{{ENTREPRISE}} / Wavestone] Échangeons sur vos priorités" : "Laisser vide pour ne pas faire cette relance"}
+              />
+              <Button size="sm" variant="outline" onClick={() => appliquerObjet(n)} disabled={lignes.length === 0}>
+                Appliquer à tous
+              </Button>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button onClick={enregistrer} disabled={!modifie || sauvegarde}>
+          {sauvegarde ? <Loader2Icon className="animate-spin" /> : <SaveIcon />} Enregistrer
+        </Button>
+        <Button variant="ghost" disabled={!modifie} onClick={() => setLignes(JSON.parse(reference))}>
+          <Undo2Icon /> Annuler les modifications
+        </Button>
+        <div className="flex-1" />
+        <Button variant="outline" onClick={() => setCollage("")}><ClipboardPasteIcon /> Coller depuis Excel</Button>
+        <Button variant="outline" onClick={() => setLignes((ls) => [...ls, { ...ligneVide(colonnes), ...Object.fromEntries(objets.map((o, k) => [`Sujet${k + 1}`, o])) }])}>
+          <PlusIcon /> Ajouter un contact
+        </Button>
+      </div>
+
+      {(nbErreurs > 0 || doublons.size > 0) && (
+        <p className="flex items-center gap-1.5 text-sm text-amber-700 dark:text-amber-300">
+          <TriangleAlertIcon className="size-4" />
+          {nbErreurs > 0 && `${nbErreurs} adresse(s) e-mail invalide(s) ou manquante(s), en rouge. `}
+          {doublons.size > 0 && `${doublons.size} adresse(s) en double.`}
+        </p>
+      )}
+
+      <Card className="py-0">
+        <div className="overflow-x-auto">
+          <table className="w-max min-w-full text-sm">
+            <thead>
+              <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
+                <th className="w-10 px-2 py-2 font-medium">#</th>
+                {colonnes.map((c) => (
+                  <th key={c} className={cn("px-1 py-2 font-medium", largeur[c] ?? "w-72")}>{libelleColonne[c] ?? c}</th>
+                ))}
+                <th className="w-10" />
+              </tr>
+            </thead>
+            <tbody>
+              {lignes.length === 0 && (
+                <tr>
+                  <td colSpan={colonnes.length + 2} className="py-10 pl-4 text-left text-muted-foreground">
+                    Aucun contact. Ajoute-les un par un, ou colle-les depuis Excel.
+                  </td>
+                </tr>
+              )}
+              {lignes.map((l, i) => (
+                <tr key={i} className="border-b last:border-0 hover:bg-muted/30">
+                  <td className="px-2 text-xs text-muted-foreground tabular-nums">{i + 1}</td>
+                  {colonnes.map((c) => {
+                    const invalide = c === "Email" && (erreurs[i] || doublons.has((l.Email ?? "").trim().toLowerCase()))
+                    return (
+                      <td key={c} className="px-1 py-1">
+                        {c === "Civilite" ? (
+                          <select
+                            className="h-7 w-full rounded-md border border-transparent bg-transparent px-1 text-sm hover:border-input focus:border-ring"
+                            value={l[c] ?? ""}
+                            onChange={(e) => modifier(i, c, e.target.value)}
+                          >
+                            <option value="" />
+                            <option>Madame</option>
+                            <option>Monsieur</option>
+                            {l[c] && !["Madame", "Monsieur"].includes(l[c]) && <option>{l[c]}</option>}
+                          </select>
+                        ) : (
+                          <Input
+                            value={l[c] ?? ""}
+                            onChange={(e) => modifier(i, c, e.target.value)}
+                            aria-invalid={invalide || undefined}
+                            className="h-7 border-transparent bg-transparent px-1.5 shadow-none hover:border-input"
+                          />
+                        )}
+                      </td>
+                    )
+                  })}
+                  <td className="px-1">
+                    <Button size="icon-xs" variant="ghost" onClick={() => setASupprimer(i)} title="Supprimer ce contact">
+                      <Trash2Icon />
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+      <p className="text-xs text-muted-foreground">
+        Ajoute les nouveaux contacts en fin de liste et ne réordonne pas les lignes d'une campagne lancée : l'objet de chaque mail
+        dépend de la position du contact.
+      </p>
+
+      <AlertDialog open={aSupprimer !== null} onOpenChange={(o) => !o && setASupprimer(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer {aSupprimer !== null && (lignes[aSupprimer]?.Nom || "ce contact")} ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {campagneDemarree
+                ? "La campagne est lancée : supprimer une ligne décale les contacts suivants. Pour arrêter les relances d'un contact, vide plutôt ses objets Mail2 à Mail4."
+                : "Le contact sera retiré de la liste à l'enregistrement."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                setLignes((ls) => ls.filter((_, j) => j !== aSupprimer))
+                setASupprimer(null)
+              }}
+            >
+              Supprimer
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={collage !== null} onOpenChange={(o) => !o && setCollage(null)}>
+        <AlertDialogContent className="data-[size=default]:max-w-2xl data-[size=default]:sm:max-w-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Coller des contacts depuis Excel</AlertDialogTitle>
+            <AlertDialogDescription>
+              Copie les lignes dans Excel puis colle-les ici. Ordre des colonnes : Civilité, Nom, Entreprise, Téléphone, E-mail (puis
+              éventuellement les 4 objets). Sans objets, ceux définis plus haut sont utilisés.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea
+            autoFocus
+            value={collage ?? ""}
+            onChange={(e) => setCollage(e.target.value)}
+            className="min-h-48 font-mono text-xs"
+            placeholder={"Madame\tMartin\tACME\t\tclaire.martin@acme.fr"}
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <Button disabled={!collage?.trim()} onClick={() => collage && coller(collage)}>Ajouter à la liste</Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  )
+}

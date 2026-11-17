@@ -1,0 +1,10 @@
+# Dependances et caches de l'interface
+interface/node_modules/
+interface/node_modules/.tmp/
+*.tsbuildinfo
+*.log
+
+# Donnees personnelles : seules les campagnes modeles sont publiees
+outil/Campagnes/*
+!outil/Campagnes/_Modele campagne/
+outil/Archives/

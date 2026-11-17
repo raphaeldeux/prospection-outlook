@@ -1,0 +1,42 @@
+# Copie l'outil (dossier outil\ du depot) vers un dossier de travail, par exemple ton dossier OneDrive.
+#
+# Ne touche JAMAIS a tes campagnes : seuls les scripts, les boutons .bat, le LisezMoi, l'interface
+# compilee et la campagne modele (_Modele campagne) sont mis a jour.
+#
+#   .\Deployer.ps1 -Cible "C:\Users\moi\OneDrive\Prospection"
+#
+# Pour modifier l'interface avant de deployer : cd interface ; npm install ; npm run build
+
+param(
+    [Parameter(Mandatory = $true)]
+    [string]$Cible
+)
+
+$ErrorActionPreference = "Stop"
+$source = Join-Path $PSScriptRoot "outil"
+if (-not (Test-Path (Join-Path $source "Interface\app\index.html"))) {
+    throw "Interface non compilee : lance 'npm run build' dans le dossier interface\ avant de deployer."
+}
+New-Item -ItemType Directory -Force $Cible | Out-Null
+
+function Copier {
+    param([string]$Relatif, [switch]$Miroir)
+    $de = Join-Path $source $Relatif
+    $vers = Join-Path $Cible $Relatif
+    $options = @("/E", "/NFL", "/NDL", "/NJH", "/NJS", "/NP")
+    if ($Miroir) { $options[0] = "/MIR" }   # supprime aussi les fichiers devenus inutiles
+    & robocopy $de $vers @options | Out-Null
+    if ($LASTEXITCODE -ge 8) { throw "Echec de la copie de $Relatif (robocopy code $LASTEXITCODE)" }
+    Write-Host "  $Relatif"
+}
+
+Write-Host "Deploiement vers $Cible :"
+Copier "Scripts"
+Copier "Interface\app" -Miroir
+Copier "Campagnes\_Modele campagne" -Miroir
+foreach ($f in Get-ChildItem $source -File) {
+    Copy-Item $f.FullName (Join-Path $Cible $f.Name) -Force
+    Write-Host "  $($f.Name)"
+}
+New-Item -ItemType Directory -Force (Join-Path $Cible "Campagnes") | Out-Null
+Write-Host "Termine. Tes campagnes n'ont pas ete modifiees."

@@ -1,0 +1,9 @@
+﻿Bonjour {{CIVILITE}} {{NOM}},
+
+[A COMPLETER] Remplacez ce paragraphe par le contenu de la relance 2 (elle repond au mail precedent, cite en dessous).
+
+Variables disponibles : {{CIVILITE}}, {{NOM}}, {{ENTREPRISE}}
+Mise en forme : **gras**, une ligne commencant par "- " devient une puce, [texte](https://exemple.fr) pour un lien.
+La signature Outlook est ajoutee automatiquement.
+
+Cordialement,
