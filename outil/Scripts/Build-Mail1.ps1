@@ -184,6 +184,8 @@ $draftItems = Get-ItemsParObjet -Folder $ns.GetDefaultFolder(16) -Prefixes $pref
 Write-Host "Lecture de la signature Outlook sur le disque..."
 $signatureHtml = Get-SignatureDepuisDisque -Outlook $outlook
 
+$issues = Get-Issues $Campagne   # contacts clos par le commercial (RDV, pas interesse...) : rien a preparer
+
 for ($i = 0; $i -lt $contacts.Count; $i++) {
     $contact = $contacts[$i]
     $email = ([string]$contact.Email).Trim()
@@ -194,6 +196,10 @@ for ($i = 0; $i -lt $contacts.Count; $i++) {
     # et un objet vide ferait matcher n'importe quel mail (StartsWith("") = vrai).
     if ([string]::IsNullOrWhiteSpace($email)) {
         if (-not [string]::IsNullOrWhiteSpace($contact.Nom)) { Write-Host "[$($contact.Nom)] colonne Email vide - ignore." }
+        continue
+    }
+    if ($issues.ContainsKey($email.ToLower())) {
+        Write-Host "[$($contact.Nom)] contact clos ($($issues[$email.ToLower()].Issue)) - ignore."
         continue
     }
     if ([string]::IsNullOrWhiteSpace($sujetPropre)) {

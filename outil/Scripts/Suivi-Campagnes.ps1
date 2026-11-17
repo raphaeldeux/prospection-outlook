@@ -145,6 +145,7 @@ $delais = @{}
 foreach ($dossier in $dossiers) {
     $delai = if ($MinJours -ge 0) { $MinJours } else { Get-DelaiRelance $dossier.FullName }
     $delais[$dossier.Name] = $delai
+    $issues = Get-Issues $dossier.FullName
     $contacts = @(Import-Csv -Path (Join-Path $dossier.FullName "contacts.csv") -Delimiter ';' -Encoding UTF8)
     foreach ($contact in $contacts) {
         # lignes vides du CSV (ex. lignes ajoutees par Excel en fin de fichier)
@@ -187,7 +188,11 @@ foreach ($dossier in $dossiers) {
         # donnees structurees pour l'interface (qui redige les messages elle-meme, en francais accentue)
         $ilYA = if ($derniere -gt 0) { ($aujourdhui - $dates[$derniere].Date).Days } else { $null }
         $relanceLe = if ($derniere -gt 0) { Format-Date $dates[$derniere].Date.AddDays($delai) } else { "" }
-        if ($reponse) {
+        $issue = if ($email) { $issues[$email] } else { $null }
+        if ($issue) {
+            # issue renseignee par le commercial (RDV, pas interesse...) : contact clos, plus de relance
+            $action = "Clos : $($issue.Issue)"; $code = "clos"
+        } elseif ($reponse) {
             $action = "A repondu le $(Format-Date $reponse.Date) - a reprendre a la main"; $code = "repondu"
         } elseif ($etapesBrouillon -contains $suivante) {
             $action = "Brouillon Mail$suivante pret dans Outlook - a relire et envoyer"; $code = "brouillon"
@@ -218,6 +223,9 @@ foreach ($dossier in $dossiers) {
             Action     = $action
             Code       = $code
             DateReponse      = if ($reponse) { Format-Date $reponse.Date } else { "" }
+            Issue            = if ($issue) { [string]$issue.Issue } else { "" }
+            IssueNote        = if ($issue) { [string]$issue.Note } else { "" }
+            IssueLe          = if ($issue) { [string]$issue.Le } else { "" }
             RelancePossibleLe = $relanceLe
             JoursDepuisEnvoi = $ilYA
         })

@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { etapeSuivante, ouvrirBrouillonsOutlook, type Campagne, type Code, type Suivi } from "@/lib/api"
 import { lireNomCampagne } from "@/lib/campagne"
 import { nomAffiche } from "@/lib/statut"
+import { ActionsContact } from "@/ActionsContact"
 
 /** "1 brouillon" / "3 brouillons" */
 const pl = (n: number, singulier: string, pluriel: string) => `${n} ${n > 1 ? pluriel : singulier}`
@@ -19,6 +20,7 @@ export function AFaire(props: {
   suivi: Suivi
   campagnes: Campagne[]
   onOuvrir: (campagne: string, filtre?: Code) => void
+  onActualiser: () => void
 }) {
   const { campagnes } = props
 
@@ -43,6 +45,7 @@ export function AFaire(props: {
     .filter((d): d is Date => !!d)
     .sort((a, b) => a.getTime() - b.getTime())
 
+  const nbRdv = campagnes.reduce((s, c) => s + c.Contacts.filter((x) => x.Code === "clos" && x.Issue === "rdv").length, 0)
   const totalCreer = aCreer.reduce((s, x) => s + x.nb, 0)
   const totalBrouillons = brouillons.reduce((s, x) => s + x.nb, 0)
   const rienAFaire = totalCreer === 0 && totalBrouillons === 0
@@ -71,10 +74,11 @@ export function AFaire(props: {
         </p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Indicateur icone={<MailPlusIcon className="size-4" />} valeur={totalCreer} libelle="Mails à préparer" />
         <Indicateur icone={<SendIcon className="size-4" />} valeur={totalBrouillons} libelle="Brouillons à envoyer" />
-        <Indicateur icone={<MessageSquareReplyIcon className="size-4" />} valeur={reponses.length} libelle="Réponses reçues" />
+        <Indicateur icone={<MessageSquareReplyIcon className="size-4" />} valeur={reponses.length} libelle="Réponses à traiter" />
+        <Indicateur icone={<CheckCircle2Icon className="size-4" />} valeur={nbRdv} libelle="RDV obtenus" />
       </div>
 
       {rienAFaire && (
@@ -143,8 +147,11 @@ export function AFaire(props: {
       {reponses.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base"><MessageSquareReplyIcon className="size-4" /> Réponses reçues</CardTitle>
-            <CardDescription>Ces contacts ont écrit : leurs relances sont arrêtées, à toi de reprendre la main.</CardDescription>
+            <CardTitle className="flex items-center gap-2 text-base"><MessageSquareReplyIcon className="size-4" /> Réponses à traiter</CardTitle>
+            <CardDescription>
+              Ces contacts ont écrit et leurs relances sont arrêtées. Lis leur réponse, puis indique l'issue (RDV obtenu, pas
+              intéressé…) pour la retirer de cette liste.
+            </CardDescription>
           </CardHeader>
           <CardContent className="divide-y">
             {reponses.slice(0, 15).map(({ campagne, contact }) => (
@@ -157,9 +164,12 @@ export function AFaire(props: {
                     {contact.DateReponse && ` · réponse du ${contact.DateReponse.slice(0, 5)}`}
                   </div>
                 </div>
-                <Button size="sm" variant="ghost" onClick={() => props.onOuvrir(campagne.Nom, "repondu")}>
-                  Voir <ArrowRightIcon />
-                </Button>
+                <div className="flex items-center gap-1.5">
+                  <ActionsContact campagne={campagne.Nom} contact={contact} onChange={props.onActualiser} />
+                  <Button size="xs" variant="ghost" onClick={() => props.onOuvrir(campagne.Nom, "repondu")} title="Voir la campagne">
+                    <ArrowRightIcon />
+                  </Button>
+                </div>
               </div>
             ))}
             {reponses.length > 15 && (

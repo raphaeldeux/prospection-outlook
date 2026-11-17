@@ -1,4 +1,4 @@
-export type Code = "repondu" | "brouillon" | "afaire" | "relance" | "attente" | "termine"
+export type Code = "repondu" | "brouillon" | "afaire" | "relance" | "attente" | "termine" | "clos"
 
 export type Contact = {
   Civilite: string
@@ -19,6 +19,10 @@ export type Contact = {
   RelancePossibleLe?: string
   /** Jours écoulés depuis le dernier envoi */
   JoursDepuisEnvoi?: number | null
+  /** Issue renseignée par le commercial (contact clos) : rdv, pas_interesse... */
+  Issue?: string
+  IssueNote?: string
+  IssueLe?: string
 }
 
 export type EtatTexte = "pret" | "a_completer" | "absent"
@@ -113,4 +117,16 @@ export async function enregistrerDelai(campagne: string, delaiRelanceJours: numb
 /** Affiche le dossier Brouillons dans Outlook */
 export async function ouvrirBrouillonsOutlook() {
   return lire<{ ok: boolean }>(await fetch("/api/outlook-brouillons", { method: "POST", headers: entetes }))
+}
+
+/** Renseigne (ou efface, issue vide) l'issue d'un contact */
+export async function enregistrerIssue(campagne: string, email: string, issue: string, note = "") {
+  return lire<{ ok: boolean }>(
+    await fetch("/api/issue", { method: "PUT", headers: entetes, body: JSON.stringify({ campagne, email, issue, note }) }),
+  )
+}
+
+/** Ouvre dans Outlook le dernier mail reçu de ce contact */
+export async function ouvrirReponseOutlook(email: string) {
+  return lire<{ ok: boolean }>(await fetch("/api/outlook-reponse", { method: "POST", headers: entetes, body: JSON.stringify({ email }) }))
 }

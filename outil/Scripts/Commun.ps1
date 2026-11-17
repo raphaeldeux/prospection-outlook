@@ -17,6 +17,24 @@ function Get-DelaiRelance {
     return $DelaiRelanceParDefaut
 }
 
+function Get-Issues {
+    # Issue renseignee par le commercial pour chaque contact (RDV obtenu, pas interesse...), fichier
+    # issues.json du dossier de campagne : { "adresse@x.fr": { "Issue": "rdv", "Note": "...", "Le": "jj/mm/aaaa" } }.
+    # Un contact avec une issue est "clos" : plus aucun mail ne lui est prepare.
+    param([string]$Dossier)
+    $resultat = @{}
+    $f = Join-Path $Dossier "issues.json"
+    if (Test-Path $f) {
+        try {
+            $j = Get-Content $f -Raw -Encoding UTF8 | ConvertFrom-Json
+            foreach ($p in $j.PSObject.Properties) {
+                if ($p.Value.Issue) { $resultat[$p.Name.Trim().ToLower()] = $p.Value }
+            }
+        } catch {}
+    }
+    return $resultat
+}
+
 function Get-ItemsParObjet {
     # Renvoie les elements d'un dossier Outlook dont l'objet COMMENCE par l'un des prefixes donnes.
     # Le filtre est execute par Outlook lui-meme (Restrict + requete DASL), ce qui evite de parcourir
@@ -39,7 +57,9 @@ function Get-ItemsParObjet {
             $resultat.Add($item)
         }
     }
-    return , $resultat
+    # renvoyes un par un : "return , $liste" passerait la liste comme UN seul objet dans le pipeline
+    # (un "| Sort-Object" ne trierait rien et une boucle verrait tous les mails a la fois)
+    $resultat
 }
 
 function Get-ItemsParExpediteur {
@@ -63,7 +83,9 @@ function Get-ItemsParExpediteur {
             if ($exp -and $uniques -contains $exp) { $resultat.Add($item) }
         }
     }
-    return , $resultat
+    # renvoyes un par un : "return , $liste" passerait la liste comme UN seul objet dans le pipeline
+    # (un "| Sort-Object" ne trierait rien et une boucle verrait tous les mails a la fois)
+    $resultat
 }
 
 # ----- Adresses e-mail des destinataires et expediteurs -----

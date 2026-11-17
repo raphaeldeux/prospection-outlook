@@ -235,6 +235,12 @@ export function Guide() {
           envoyer (avec un bouton qui ouvre directement le dossier Brouillons d'Outlook) et réponses reçues. Commence ta
           journée par là ; un clic t'amène au bon endroit.
         </p>
+        <p>
+          <strong>Après une réponse</strong>, ouvre-la dans Outlook (« Lire la réponse »), puis choisis l'issue dans la liste :
+          RDV obtenu, intéressé à suivre, à recontacter plus tard, pas intéressé, mauvais interlocuteur ou traité. Le contact est
+          alors clos. Tu peux aussi clore un contact qui n'a pas répondu par mail (par exemple après un échange téléphonique) :
+          ses relances s'arrêtent.
+        </p>
         <p>Dans une campagne, chaque contact a un statut :</p>
         <div className="space-y-2">
           {([
@@ -242,7 +248,8 @@ export function Guide() {
             ["afaire", "Aucun mail envoyé pour l'instant : crée le Mail1."],
             ["brouillon", "Un brouillon attend dans Outlook : relis-le et envoie-le."],
             ["attente", "Le dernier mail est plus récent que le délai de la campagne : la date de relance possible est indiquée. Baisse le délai pour relancer plus tôt."],
-            ["repondu", "Le contact a écrit depuis le premier envoi : les relances s'arrêtent, à toi de jouer."],
+            ["repondu", "Le contact a écrit depuis le premier envoi : les relances s'arrêtent. Lis sa réponse (bouton « Lire la réponse ») puis indique l'issue."],
+            ["clos", "Tu as indiqué l'issue (RDV obtenu, pas intéressé…) : plus aucun mail ne lui est préparé. « Rouvrir » annule."],
             ["termine", "Les 4 mails (ou toutes les étapes prévues) sont partis, sans réponse."],
           ] as const).map(([code, texte]) => (
             <div key={code} className="flex items-start gap-3">

@@ -10,6 +10,8 @@
 #   PUT  /api/parametres -> enregistre les reglages de la campagne (delai avant relance)
 #   POST /api/ouvrir    -> ouvre le dossier de la campagne dans l'Explorateur
 #   POST /api/outlook-brouillons -> affiche le dossier Brouillons dans Outlook
+#   PUT  /api/issue     -> issue d'un contact (RDV, pas interesse...) dans issues.json
+#   POST /api/outlook-reponse -> ouvre dans Outlook le dernier mail recu d'un contact
 #   POST /api/campagnes -> cree une campagne a partir de "_Modele campagne"
 #
 # Securite : ecoute uniquement sur localhost, et chaque appel /api doit porter l'en-tete
@@ -228,6 +230,44 @@ try {
                     Write-FichierCampagne -Chemin (Join-Path $dossier "parametres.json") -Contenu $json
                     Write-Host "$(Get-Date -Format HH:mm:ss) Delai avant relance : $delai jour(s) - $($corps.campagne)"
                     Send-Json $ctx 200 @{ ok = $true }
+                    continue
+                }
+
+                if ($chemin -eq "/api/issue" -and $req.HttpMethod -eq "PUT") {
+                    # Issue d'un contact (RDV obtenu, pas interesse...) dans issues.json ; issue vide = rouvrir le contact
+                    $corps = Read-Corps $req
+                    $dossier = Get-DossierCampagne $corps.campagne
+                    $email = ([string]$corps.email).Trim().ToLower()
+                    if (-not $dossier -or -not $email) { Send-Json $ctx 400 @{ erreur = "Campagne ou contact invalide." }; continue }
+                    $f = Join-Path $dossier "issues.json"
+                    $issues = [ordered]@{}
+                    if (Test-Path $f) {
+                        try { (Get-Content $f -Raw -Encoding UTF8 | ConvertFrom-Json).PSObject.Properties | ForEach-Object { $issues[$_.Name] = $_.Value } } catch {}
+                    }
+                    if ([string]::IsNullOrWhiteSpace($corps.issue)) {
+                        $issues.Remove($email)
+                    } else {
+                        $issues[$email] = [ordered]@{ Issue = [string]$corps.issue; Note = [string]$corps.note; Le = (Get-Date).ToString("dd/MM/yyyy") }
+                    }
+                    Write-FichierCampagne -Chemin $f -Contenu ([pscustomobject]$issues | ConvertTo-Json -Depth 4)
+                    Write-Host "$(Get-Date -Format HH:mm:ss) Issue '$($corps.issue)' pour $email - $($corps.campagne)"
+                    Send-Json $ctx 200 @{ ok = $true }
+                    continue
+                }
+
+                if ($chemin -eq "/api/outlook-reponse" -and $req.HttpMethod -eq "POST") {
+                    # Ouvre dans Outlook le dernier mail recu de ce contact (sa reponse)
+                    $corps = Read-Corps $req
+                    $email = ([string]$corps.email).Trim().ToLower()
+                    if ($email -notmatch '^[^@\s'']+@[^@\s'']+$') { Send-Json $ctx 400 @{ erreur = "Adresse invalide." }; continue }
+                    $cmd = ". $(Q (Join-Path $scripts 'Commun.ps1')); " +
+                           "`$ns = [Runtime.InteropServices.Marshal]::GetActiveObject('Outlook.Application').GetNamespace('MAPI'); " +
+                           "`$l = Get-ItemsParExpediteur -Folder `$ns.GetDefaultFolder(6) -Adresses @($(Q $email)) -Depuis (Get-Date).AddYears(-1); " +
+                           "`$m = `$l | Sort-Object ReceivedTime -Descending | Select-Object -First 1; " +
+                           "if (-not `$m) { throw 'Aucun mail de ce contact dans la boite de reception (deplace ou archive ?)' }; `$m.Display()"
+                    $res = Invoke-ScriptEnfant $cmd
+                    if ($res.Code -eq 0) { Send-Json $ctx 200 @{ ok = $true } }
+                    else { Send-Json $ctx 404 @{ erreur = ($res.Journal -replace '^ERREUR : ', '') } }
                     continue
                 }
 

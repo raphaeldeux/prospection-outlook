@@ -1,5 +1,6 @@
 // Libellés lisibles pour un commercial, calculés à partir des données du suivi
 import { etapeSuivante, type Contact } from "@/lib/api"
+import { libelleIssue } from "@/lib/issues"
 
 /** "Claire Martin" ; à défaut "Madame Martin" ; à défaut l'adresse */
 export function nomAffiche(c: Contact) {
@@ -14,6 +15,8 @@ const depuis = (n?: number | null) => (n === 0 ? "aujourd'hui" : n === 1 ? "hier
 export function detailStatut(c: Contact): string {
   const n = etapeSuivante(c)
   switch (c.Code) {
+    case "clos":
+      return [c.IssueLe && `Clos le ${jjmm(c.IssueLe)}`, c.IssueNote].filter(Boolean).join(" · ") || libelleIssue(c.Issue)
     case "repondu":
       return c.DateReponse ? `Réponse reçue le ${jjmm(c.DateReponse)} : à toi de jouer` : "Réponse reçue : à toi de jouer"
     case "brouillon":

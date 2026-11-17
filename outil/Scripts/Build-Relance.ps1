@@ -154,10 +154,17 @@ $inboxItems = @(Get-ItemsParExpediteur -Folder $ns.GetDefaultFolder(6) -Adresses
 
 $seuilDate = (Get-Date).AddDays(-$MinJours)
 $mesAdresses = Get-MesAdresses -Namespace $ns
+$issues = Get-Issues $Campagne   # contacts clos par le commercial (RDV, pas interesse...) : plus de relance
 
 for ($i = 0; $i -lt $contacts.Count; $i++) {
     $contact = $contacts[$i]
     $sujetPropre = Resolve-Variables -Texte $contact."Sujet$Etape" -Contact $contact
+
+    $cle = ([string]$contact.Email).Trim().ToLower()
+    if ($cle -and $issues.ContainsKey($cle)) {
+        Write-Host "[$($contact.Nom)] contact clos ($($issues[$cle].Issue)) - ignore."
+        continue
+    }
 
     # Garde-fou : un sujet vide ferait matcher N'IMPORTE QUEL mail (StartsWith("") = vrai),
     # avec le risque de repondre a un echange sans rapport.

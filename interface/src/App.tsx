@@ -33,6 +33,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { EditeurContacts } from "@/EditeurContacts"
 import { EditeurTextes } from "@/EditeurTextes"
+import { ActionsContact } from "@/ActionsContact"
 import { AFaire } from "@/AFaire"
 import { Guide } from "@/Guide"
 import { detailStatut, nomAffiche } from "@/lib/statut"
@@ -250,7 +251,7 @@ export default function App() {
         {selection === GUIDE ? (
           <Guide />
         ) : selection === AFAIRE && suivi && campagnes.length > 0 ? (
-          <AFaire suivi={suivi} campagnes={campagnes} onOuvrir={(nom, f) => choisir(nom, f ?? null)} />
+          <AFaire suivi={suivi} campagnes={campagnes} onOuvrir={(nom, f) => choisir(nom, f ?? null)} onActualiser={actualiser} />
         ) : erreur && !suivi ? (
           <EcranErreur erreur={erreur} onReessayer={actualiser} chargement={chargement} />
         ) : !campagne ? (
@@ -585,7 +586,7 @@ function VueCampagne(props: {
               <TableHead className="pl-4">Contact</TableHead>
               <TableHead>Entreprise</TableHead>
               {[1, 2, 3, 4].map((n) => <TableHead key={n}>Mail{n}</TableHead>)}
-              <TableHead className="pr-4">Prochaine action</TableHead>
+              <TableHead className="pr-4">Statut et actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -616,8 +617,9 @@ function VueCampagne(props: {
                 ))}
                 <TableCell className="pr-4">
                   <div className="flex flex-col items-start gap-1">
-                    <StatutBadge code={c.Code} />
+                    <StatutBadge code={c.Code} issue={c.Issue} />
                     <span className="text-xs text-muted-foreground">{detailStatut(c)}</span>
+                    <ActionsContact campagne={campagne.Nom} contact={c} onChange={props.onActualiser} />
                   </div>
                 </TableCell>
               </TableRow>
