@@ -64,7 +64,7 @@ export default function App() {
   const [erreur, setErreur] = useState<{ message: string; journal?: string } | null>(null)
   const [selection, setSelection] = useState(lireSelection)
   const [filtre, setFiltre] = useState<Code | null>(null)
-  const [aConfirmer, setAConfirmer] = useState<{ etape: number; nb: number } | null>(null)
+  const [aConfirmer, setAConfirmer] = useState<{ etape: number; nb: number; raison?: string } | null>(null)
   const [enCours, setEnCours] = useState<number | null>(null)
   const [journal, setJournal] = useState<{ titre: string; texte: string; ok: boolean } | null>(null)
   const [nouvelle, setNouvelle] = useState<string | null>(null)
@@ -234,7 +234,7 @@ export default function App() {
             setFiltre={setFiltre}
             enCours={enCours}
             onActualiser={actualiser}
-            onGenerer={(etape, nb) => setAConfirmer({ etape, nb })}
+            onGenerer={(etape, nb, raison) => setAConfirmer({ etape, nb, raison })}
             onOuvrirDossier={ouvrirLeDossier}
             onglet={onglet}
             setOnglet={setOnglet}
@@ -252,7 +252,7 @@ export default function App() {
             <AlertDialogDescription>
               {aConfirmer?.nb
                 ? `${aConfirmer.nb} contact(s) semblent concernés. `
-                : "Aucun contact ne semble concerné pour l'instant, l'outil vérifiera à nouveau. "}
+                : `${aConfirmer?.raison || "Aucun contact ne semble concerné pour l'instant."} L'outil vérifiera à nouveau dans Outlook. `}
               Les brouillons seront créés dans Outlook. Rien n'est envoyé : tu relis et tu envoies toi-même.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -320,7 +320,7 @@ function VueCampagne(props: {
   setFiltre: (c: Code | null) => void
   enCours: number | null
   onActualiser: () => void
-  onGenerer: (etape: number, nb: number) => void
+  onGenerer: (etape: number, nb: number, raison?: string) => void
   onOuvrirDossier: () => void
   onglet: string
   setOnglet: (o: string) => void
@@ -376,7 +376,19 @@ function VueCampagne(props: {
     const envoyes = contacts.filter((c) => c[`Mail${n}` as "Mail1"]).length
     const prevus = contacts.filter((c) => c.NbEtapes >= n).length
     const enAttente = n === 1 ? 0 : contacts.filter((c) => c.Code === "attente" && etapeSuivante(c) === n).length
-    return { n, texte, aCreer, brouillons, envoyes, prevus, enAttente }
+    // Pourquoi personne n'est prêt : affiché dans la confirmation
+    const concernes = contacts.filter((c) => c.NbEtapes >= n && !c[`Mail${n}` as "Mail1"])
+    const detail = [
+      prevus === 0 && `aucun contact n'a d'objet pour Mail${n} (onglet Contacts)`,
+      enAttente > 0 && `${enAttente} attendent le délai de ${campagne.DelaiRelance} jour(s)`,
+      brouillons > 0 && `${brouillons} ont déjà un brouillon à envoyer`,
+      n > 1 && concernes.filter((c) => etapeSuivante(c) < n && c.Code !== "repondu").length > 0 &&
+        `${concernes.filter((c) => etapeSuivante(c) < n && c.Code !== "repondu").length} n'ont pas encore reçu Mail${n - 1}`,
+      concernes.filter((c) => c.Code === "repondu").length > 0 &&
+        `${concernes.filter((c) => c.Code === "repondu").length} ont répondu`,
+    ].filter(Boolean)
+    const raison = detail.length ? `Personne n'est prêt pour l'instant : ${detail.join(", ")}.` : ""
+    return { n, texte, aCreer, brouillons, envoyes, prevus, enAttente, raison }
   })
 
   const visibles = filtre ? contacts.filter((c) => c.Code === filtre) : contacts
@@ -455,7 +467,17 @@ function VueCampagne(props: {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-2">
-                {bloque ? (
+                {e.prevus === 0 && contacts.length > 0 ? (
+                  <p className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300">
+                    <TriangleAlertIcon className="mt-0.5 size-3.5 shrink-0" />
+                    <span>
+                      Aucun contact n'a d'objet pour Mail{e.n} : la séquence s'arrête avant.{" "}
+                      <button className="underline underline-offset-2" onClick={() => setOnglet("contacts")}>
+                        Renseigner l'objet
+                      </button>
+                    </span>
+                  </p>
+                ) : bloque ? (
                   <p className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300">
                     <TriangleAlertIcon className="mt-0.5 size-3.5 shrink-0" />
                     {e.texte === "absent" ? "Texte pas encore créé." : "Texte à compléter avant de créer les brouillons."}
@@ -471,8 +493,8 @@ function VueCampagne(props: {
                     size="sm"
                     className="flex-1"
                     variant={e.aCreer > 0 && !bloque ? "default" : "outline"}
-                    disabled={bloque || enCours !== null}
-                    onClick={() => props.onGenerer(e.n, e.aCreer)}
+                    disabled={bloque || e.prevus === 0 || enCours !== null}
+                    onClick={() => props.onGenerer(e.n, e.aCreer, e.raison)}
                   >
                     {enCours === e.n ? <Loader2Icon className="animate-spin" /> : <MailPlusIcon />}
                     {enCours === e.n ? "Création…" : "Créer les brouillons"}
@@ -547,7 +569,9 @@ function VueCampagne(props: {
                 <TableCell className="pr-4">
                   <div className="flex flex-col items-start gap-1">
                     <StatutBadge code={c.Code} />
-                    {c.Code === "attente" && <span className="text-xs text-muted-foreground">{c.Action}</span>}
+                    {(c.Code === "attente" || (c.Code === "termine" && c.NbEtapes < 4)) && (
+                      <span className="text-xs text-muted-foreground">{c.Action}</span>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>

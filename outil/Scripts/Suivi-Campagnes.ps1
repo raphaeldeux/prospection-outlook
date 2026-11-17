@@ -190,7 +190,7 @@ foreach ($dossier in $dossiers) {
         } elseif ($derniere -eq 0) {
             $action = "Mail1 pas encore cree (lancer 1 - Mail1.bat)"; $code = "afaire"
         } elseif ($suivante -gt $nbEtapes) {
-            $action = "Sequence terminee, pas de reponse"; $code = "termine"
+            $action = if ($nbEtapes -lt 4) { "Sequence terminee apres Mail$nbEtapes (pas d'objet pour Mail$($nbEtapes + 1)), pas de reponse" } else { "Sequence terminee, pas de reponse" }; $code = "termine"
         } else {
             $ilYA = ($aujourdhui - $dates[$derniere].Date).Days
             if ($ilYA -ge $delai) {
