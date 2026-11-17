@@ -38,5 +38,7 @@ foreach ($f in Get-ChildItem $source -File) {
     Copy-Item $f.FullName (Join-Path $Cible $f.Name) -Force
     Write-Host "  $($f.Name)"
 }
+Copy-Item (Join-Path $PSScriptRoot "Installer.bat") (Join-Path $Cible "Installer ou mettre a jour.bat") -Force
+Write-Host "  Installer ou mettre a jour.bat"
 New-Item -ItemType Directory -Force (Join-Path $Cible "Campagnes") | Out-Null
 Write-Host "Termine. Tes campagnes n'ont pas ete modifiees."

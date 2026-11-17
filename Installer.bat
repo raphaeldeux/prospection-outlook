@@ -30,6 +30,7 @@ $branche   = "main"
 #   PROSPECTION_SANS_MEMOIRE   1 : ne pas memoriser le dossier d'installation
 #   PROSPECTION_PROGRAMMES     dossier des programmes portables (defaut : %LOCALAPPDATA%\Programs)
 #   PROSPECTION_SOURCE         dossier du code source (defaut : %LOCALAPPDATA%\prospection-outlook)
+#   PROSPECTION_SANS_AUTOMAJ   1 : ne pas telecharger la derniere version de l'installeur
 $parDefaut = Join-Path ([Environment]::GetFolderPath("MyDocuments")) "Prospection"
 
 function Etape { param([string]$t) Write-Host ""; Write-Host "== $t" -ForegroundColor Cyan }
@@ -45,6 +46,31 @@ function Get-Fichier {
     $dest = Join-Path $Dossier $nom
     Invoke-WebRequest -Uri $Url -OutFile $dest -UseBasicParsing
     return $dest
+}
+
+# ---------- 0. Mise a jour de l'installeur lui-meme ----------
+# Une ancienne copie de ce fichier (telechargee il y a longtemps, ou deposee dans le dossier installe)
+# recupere d'abord la derniere version publiee et l'execute a sa place : les corrections de
+# l'installeur profitent ainsi a tout le monde. Sans connexion, cette version-ci est utilisee.
+# IMPORTANT : ne jamais modifier les lignes AVANT le marqueur PS-DEBUT (en-tete batch). Le fichier
+# peut etre remplace pendant qu'il s'execute ; cmd reprend sa lecture a la meme position et doit y
+# retrouver les memes lignes ("echo.", "pause", "exit /b").
+if ($env:PROSPECTION_SANS_AUTOMAJ -ne "1") {
+    try {
+        $marqueur = '##PS-' + 'DEBUT##'
+        $distant = (Invoke-WebRequest "https://raw.githubusercontent.com/$depot/$branche/Installer.bat" -UseBasicParsing -TimeoutSec 20).Content
+        if ($distant -is [byte[]]) { $distant = [Text.Encoding]::UTF8.GetString($distant) }
+        $local = [IO.File]::ReadAllText($env:INSTALLEUR)
+        $iD = $distant.IndexOf($marqueur); $iL = $local.IndexOf($marqueur)
+        if ($iD -ge 0 -and $iL -ge 0 -and ($distant.Substring($iD) -replace "`r", "") -ne ($local.Substring($iL) -replace "`r", "")) {
+            Write-Host "Une version plus recente de l'installeur est disponible : elle est utilisee." -ForegroundColor Cyan
+            $env:PROSPECTION_SANS_AUTOMAJ = "1"
+            & ([scriptblock]::Create($distant.Substring($iD)))
+            return
+        }
+    } catch {
+        # hors ligne ou GitHub indisponible : on continue avec cette version
+    }
 }
 
 try {
@@ -150,7 +176,13 @@ try {
     Copier "Campagnes\_Modele campagne" -Miroir
     Get-ChildItem $source -File | ForEach-Object { Copy-Item $_.FullName (Join-Path $dossier $_.Name) -Force }
     New-Item -ItemType Directory -Force (Join-Path $dossier "Campagnes") | Out-Null
-    Copy-Item $env:INSTALLEUR (Join-Path $dossier "Installer ou mettre a jour.bat") -Force -ErrorAction SilentlyContinue
+    # Installeur de mise a jour : la derniere version (celle de l'archive), pas forcement ce fichier-ci
+    $majSource = Join-Path $racineDepot "Installer.bat"
+    if (-not (Test-Path $majSource)) { $majSource = $env:INSTALLEUR }
+    $majCible = Join-Path $dossier "Installer ou mettre a jour.bat"
+    if (-not (Test-Path $majCible) -or (Get-FileHash $majSource).Hash -ne (Get-FileHash $majCible).Hash) {
+        Copy-Item $majSource $majCible -Force -ErrorAction SilentlyContinue
+    }
     if ($version) { Set-Content (Join-Path $dossier "version.txt") "$version $(Get-Date -Format 'dd/MM/yyyy HH:mm')" -Encoding ASCII }
     # Memorise le dossier pour les prochaines mises a jour (fichier personnel, aucun droit requis)
     if ($env:PROSPECTION_SANS_MEMOIRE -ne "1") {
