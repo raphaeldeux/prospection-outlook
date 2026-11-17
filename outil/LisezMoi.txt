@@ -71,8 +71,10 @@ SAVOIR OU J'EN SUIS
 Double-cliquer "Suivi des campagnes.bat" (a la racine du dossier Prospection), Outlook classique
 ouvert. Pour chaque contact de chaque campagne (sauf _Modele campagne) :
    - date d'envoi de Mail1, Mail2, Mail3, Mail4 (lues dans les Elements envoyes d'Outlook)
-   - prochaine action : relance possible (>= 3 jours), brouillon a envoyer, attendre jusqu'au...,
-     a repondu (a reprendre a la main), sequence terminee
+   - prochaine action : relance possible, brouillon a envoyer, relance possible le..., a repondu
+     (a reprendre a la main), sequence terminee
+Le delai minimal avant relance se regle par campagne dans l'interface (3 jours par defaut, 0 = a
+tout moment). Il est enregistre dans le fichier parametres.json du dossier de la campagne.
 Le resume s'affiche dans la fenetre noire et un rapport plus lisible s'ouvre dans le navigateur.
 Lecture seule : rien n'est cree ni envoye.
 

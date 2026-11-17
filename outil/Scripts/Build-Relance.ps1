@@ -9,7 +9,8 @@
 #
 # Un contact est automatiquement SAUTE si :
 #   - aucun mail n'a encore ete envoye pour lui dans ce fil (etape precedente introuvable)
-#   - le dernier mail envoye a moins de -MinJours jours
+#   - le dernier mail envoye date de moins que le delai avant relance de la campagne
+#     (parametres.json, reglable dans l'interface ; 3 jours par defaut ; -MinJours pour forcer)
 #   - il a deja repondu manuellement (un mail de sa part est arrive dans la Boite de reception
 #     APRES le dernier mail envoye) -> dans ce cas la relance automatique s'arrete pour lui,
 #     un humain doit reprendre la main.
@@ -18,8 +19,8 @@
 #
 # Usage : double-cliquer "2 - Mail2 (relance 1).bat" DANS le dossier de la campagne concernee
 # (Campagnes\<nom de la campagne>\). Le .bat transmet son propre dossier via -Campagne.
-#   .\Build-Relance.ps1 -Campagne "<dossier>" -Etape 2               # si Mail1 envoye il y a >= 3 jours
-#   .\Build-Relance.ps1 -Campagne "<dossier>" -Etape 3 -MinJours 0   # pour tester sans attendre
+#   .\Build-Relance.ps1 -Campagne "<dossier>" -Etape 2               # delai de la campagne
+#   .\Build-Relance.ps1 -Campagne "<dossier>" -Etape 3 -MinJours 0   # sans attendre, pour cette fois
 
 param(
     [Parameter(Mandatory = $true)]
@@ -29,13 +30,16 @@ param(
     [ValidateSet(2, 3, 4)]
     [int]$Etape,
 
-    [int]$MinJours = 3
+    # -1 = delai defini pour la campagne (parametres.json)
+    [int]$MinJours = -1
 )
 
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "Commun.ps1")
 
 if (-not (Test-Path $Campagne)) { throw "Dossier de campagne introuvable : $Campagne" }
+if ($MinJours -lt 0) { $MinJours = Get-DelaiRelance $Campagne }
+Write-Host "Delai minimal depuis le dernier envoi : $MinJours jour(s)."
 $csvPath   = Join-Path $Campagne "contacts.csv"
 $bodyPath  = Join-Path $Campagne "Textes\Mail$Etape.txt"
 if (-not (Test-Path $csvPath)) { throw "Fichier introuvable : $csvPath" }

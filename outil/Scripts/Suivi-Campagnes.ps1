@@ -17,8 +17,9 @@
 param(
     [string]$Campagne,
 
-    # delai minimal avant relance, aligne sur -MinJours de Build-Relance.ps1
-    [int]$MinJours = 3,
+    # delai minimal avant relance : -1 = celui de chaque campagne (parametres.json, 3 jours par
+    # defaut) ; une valeur >= 0 l'impose a toutes les campagnes
+    [int]$MinJours = -1,
 
     # profondeur de recherche dans Outlook (on s'arrete aux mails plus anciens, pour aller vite)
     [int]$JoursHistorique = 180,
@@ -137,7 +138,10 @@ $recus = if ($adresses) { Get-IndexParAdresse -Folder $ns.GetDefaultFolder(6) -C
 $aujourdhui = (Get-Date).Date
 $resultats = New-Object System.Collections.Generic.List[object]
 
+$delais = @{}
 foreach ($dossier in $dossiers) {
+    $delai = if ($MinJours -ge 0) { $MinJours } else { Get-DelaiRelance $dossier.FullName }
+    $delais[$dossier.Name] = $delai
     $contacts = @(Import-Csv -Path (Join-Path $dossier.FullName "contacts.csv") -Delimiter ';' -Encoding UTF8)
     foreach ($contact in $contacts) {
         # lignes vides du CSV (ex. lignes ajoutees par Excel en fin de fichier)
@@ -185,10 +189,10 @@ foreach ($dossier in $dossiers) {
             $action = "Sequence terminee, pas de reponse"; $code = "termine"
         } else {
             $ilYA = ($aujourdhui - $dates[$derniere].Date).Days
-            if ($ilYA -ge $MinJours) {
+            if ($ilYA -ge $delai) {
                 $action = "Relance Mail$suivante possible (dernier envoi il y a $ilYA j)"; $code = "relance"
             } else {
-                $action = "Attendre le $(Format-Date $dates[$derniere].Date.AddDays($MinJours)) pour Mail$suivante"; $code = "attente"
+                $action = "Relance Mail$suivante possible le $(Format-Date $dates[$derniere].Date.AddDays($delai)) (dernier envoi il y a $ilYA j)"; $code = "attente"
             }
         }
 
@@ -222,13 +226,13 @@ if ($JsonPath) {
         }
         [pscustomobject]@{
             Nom      = $dossier.Name
+            DelaiRelance = $delais[$dossier.Name]
             Textes   = @($textes)
             Contacts = @($resultats | Where-Object Campagne -eq $dossier.Name | Select-Object * -ExcludeProperty Campagne)
         }
     }
     $sortie = [pscustomobject]@{
         GenereLe  = (Get-Date).ToString("dd/MM/yyyy HH:mm")
-        MinJours  = $MinJours
         Campagnes = @($campagnesJson)
     }
     [System.IO.File]::WriteAllText($JsonPath, ($sortie | ConvertTo-Json -Depth 6), (New-Object System.Text.UTF8Encoding $false))
@@ -273,7 +277,7 @@ if (-not $SansRapport) {
             }
             "<tr class='$($r.Code)'><td><b>$(H $r.Nom)</b><br><small>$(H $r.Email)</small></td><td>$(H $r.Entreprise)</td>$($cellules -join '')<td class='action'>$(H $r.Action)</td></tr>"
         }
-        "<h2>$(H $groupe.Name)</h2><table><tr><th>Contact</th><th>Entreprise</th><th>Mail1</th><th>Mail2</th><th>Mail3</th><th>Mail4</th><th>Prochaine action</th></tr>$($lignes -join "`n")</table>"
+        "<h2>$(H $groupe.Name) <small>&middot; relance possible &agrave; J+$($delais[$groupe.Name])</small></h2><table><tr><th>Contact</th><th>Entreprise</th><th>Mail1</th><th>Mail2</th><th>Mail3</th><th>Mail4</th><th>Prochaine action</th></tr>$($lignes -join "`n")</table>"
     }
 
     $html = @"
@@ -291,7 +295,7 @@ if (-not $SansRapport) {
  tr.attente .action, tr.termine .action { color: #888; }
 </style></head><body>
 <h1>Suivi des campagnes de prospection</h1>
-<p class="date">G&eacute;n&eacute;r&eacute; le $(Get-Date -Format "dd/MM/yyyy HH:mm") &middot; relance possible &agrave; partir de J+$MinJours</p>
+<p class="date">G&eacute;n&eacute;r&eacute; le $(Get-Date -Format "dd/MM/yyyy HH:mm")</p>
 $($sections -join "`n")
 </body></html>
 "@

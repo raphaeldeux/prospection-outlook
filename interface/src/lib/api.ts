@@ -18,11 +18,13 @@ export type EtatTexte = "pret" | "a_completer" | "absent"
 
 export type Campagne = {
   Nom: string
+  /** Délai minimal (jours) entre deux mails, réglable par campagne */
+  DelaiRelance: number
   Textes: { Etape: number; Etat: EtatTexte }[]
   Contacts: Contact[]
 }
 
-export type Suivi = { GenereLe: string; MinJours: number; Campagnes: Campagne[] }
+export type Suivi = { GenereLe: string; Campagnes: Campagne[] }
 
 // L'en-tete X-Prospection est exige par le serveur local (protection contre les appels d'autres sites)
 const entetes = { "X-Prospection": "1", "Content-Type": "application/json" }
@@ -94,3 +96,9 @@ export async function creerCampagne(nom: string) {
   )
 }
 
+
+export async function enregistrerDelai(campagne: string, delaiRelanceJours: number) {
+  return lire<{ ok: boolean }>(
+    await fetch("/api/parametres", { method: "PUT", headers: entetes, body: JSON.stringify({ campagne, delaiRelanceJours }) }),
+  )
+}

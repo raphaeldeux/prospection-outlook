@@ -184,10 +184,17 @@ export function Guide() {
         <ul className="list-disc space-y-1.5 pl-5">
           <li><strong>Mail1</strong> : pour tous les contacts qui n'ont encore rien reçu.</li>
           <li>
-            <strong>Relances</strong> : uniquement pour les contacts dont le mail précédent est parti depuis au moins{" "}
-            <strong>3 jours</strong> et qui n'ont pas répondu.
+            <strong>Relances</strong> : pour les contacts qui n'ont pas répondu et dont le mail précédent est parti depuis au
+            moins le <strong>délai de la campagne</strong>.
           </li>
         </ul>
+        <p>
+          <strong>Choisir quand relancer :</strong> sous le nom de la campagne, règle « Relancer au plus tôt <em>N</em> jour(s)
+          après le mail précédent » puis enregistre. Ce réglage vaut <strong>3 jours</strong> par défaut et est propre à
+          chaque campagne. Mets <strong>0</strong> pour pouvoir relancer à tout moment : c'est alors toi qui décides en
+          cliquant sur « Créer les brouillons ». Tu peux aussi l'abaisser ponctuellement, créer les relances, puis le
+          remonter.
+        </p>
         <p>Tu peux relancer une étape sans risque : l'outil saute automatiquement</p>
         <ul className="list-disc space-y-1.5 pl-5">
           <li>les contacts qui ont déjà un brouillon ou un mail envoyé pour cette étape ;</li>
@@ -200,10 +207,10 @@ export function Guide() {
       <Section id="statuts" titre="Lire le suivi">
         <div className="space-y-2">
           {([
-            ["relance", "Le dernier mail date d'au moins 3 jours : la relance suivante peut être créée."],
+            ["relance", "Le délai de la campagne est écoulé depuis le dernier mail : la relance suivante peut être créée."],
             ["afaire", "Aucun mail envoyé pour l'instant : crée le Mail1."],
             ["brouillon", "Un brouillon attend dans Outlook : relis-le et envoie-le."],
-            ["attente", "Le dernier mail est trop récent, la date de relance possible est indiquée."],
+            ["attente", "Le dernier mail est plus récent que le délai de la campagne : la date de relance possible est indiquée. Baisse le délai pour relancer plus tôt."],
             ["repondu", "Le contact a écrit depuis le premier envoi : les relances s'arrêtent, à toi de jouer."],
             ["termine", "Les 4 mails (ou toutes les étapes prévues) sont partis, sans réponse."],
           ] as const).map(([code, texte]) => (

@@ -7,6 +7,8 @@ import {
   MailPlusIcon,
   PlusIcon,
   RefreshCwIcon,
+  SaveIcon,
+  TimerIcon,
   TriangleAlertIcon,
   UsersIcon,
 } from "lucide-react"
@@ -33,6 +35,7 @@ import {
   chargerFichiers,
   chargerSuivi,
   creerCampagne,
+  enregistrerDelai,
   etapeSuivante,
   genererBrouillons,
   ouvrirDossier,
@@ -363,7 +366,8 @@ function VueCampagne(props: {
     const brouillons = contacts.filter((c) => c.Code === "brouillon" && etapeSuivante(c) === n).length
     const envoyes = contacts.filter((c) => c[`Mail${n}` as "Mail1"]).length
     const prevus = contacts.filter((c) => c.NbEtapes >= n).length
-    return { n, texte, aCreer, brouillons, envoyes, prevus }
+    const enAttente = n === 1 ? 0 : contacts.filter((c) => c.Code === "attente" && etapeSuivante(c) === n).length
+    return { n, texte, aCreer, brouillons, envoyes, prevus, enAttente }
   })
 
   const visibles = filtre ? contacts.filter((c) => c.Code === filtre) : contacts
@@ -374,8 +378,9 @@ function VueCampagne(props: {
         <div>
           <h1 className="text-xl font-semibold">{campagne.Nom}</h1>
           <p className="text-sm text-muted-foreground">
-            {contacts.length} contact(s) · suivi lu dans Outlook le {suivi.GenereLe} · relance possible à J+{suivi.MinJours}
+            {contacts.length} contact(s) · suivi lu dans Outlook le {suivi.GenereLe}
           </p>
+          <ReglageDelai key={campagne.Nom} campagne={campagne.Nom} delai={campagne.DelaiRelance} onEnregistre={props.onActualiser} />
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={props.onOuvrirDossier}><FolderOpenIcon /> Dossier</Button>
@@ -448,6 +453,7 @@ function VueCampagne(props: {
                 ) : (
                   <p className="text-xs text-muted-foreground">
                     {e.aCreer > 0 ? `${e.aCreer} contact(s) prêt(s)` : "Aucun contact prêt pour l'instant"}
+                    {e.enAttente > 0 && ` · ${e.enAttente} en attente du délai de ${campagne.DelaiRelance} j`}
                   </p>
                 )}
                 <div className="flex gap-2">
@@ -542,6 +548,58 @@ function VueCampagne(props: {
         </TabsContent>
       </Tabs>
     </div>
+  )
+}
+
+/** Délai minimal entre deux mails de la séquence, propre à la campagne (0 = pas d'attente) */
+function ReglageDelai(props: { campagne: string; delai: number; onEnregistre: () => void }) {
+  const [valeur, setValeur] = useState(String(props.delai ?? 3))
+  const [sauvegarde, setSauvegarde] = useState(false)
+  const n = Number(valeur)
+  const valide = valeur.trim() !== "" && Number.isInteger(n) && n >= 0 && n <= 90
+  const modifie = valide && n !== props.delai
+
+  async function enregistrer() {
+    setSauvegarde(true)
+    try {
+      await enregistrerDelai(props.campagne, n)
+      toast.success(n === 0 ? "Relances possibles sans délai" : `Relance possible ${n} jour(s) après le mail précédent`)
+      props.onEnregistre()
+    } catch (e) {
+      toast.error((e as Error).message)
+    } finally {
+      setSauvegarde(false)
+    }
+  }
+
+  return (
+    <form
+      className="mt-1.5 flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground"
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (modifie) void enregistrer()
+      }}
+    >
+      <TimerIcon className="size-4" />
+      <span>Relancer au plus tôt</span>
+      <Input
+        type="number"
+        min={0}
+        max={90}
+        value={valeur}
+        onChange={(e) => setValeur(e.target.value)}
+        aria-invalid={!valide || undefined}
+        className="h-7 w-16 px-2 text-center"
+        aria-label="Délai avant relance, en jours"
+      />
+      <span>jour(s) après le mail précédent</span>
+      {modifie && (
+        <Button type="submit" size="sm" disabled={sauvegarde}>
+          {sauvegarde ? <Loader2Icon className="animate-spin" /> : <SaveIcon />} Enregistrer
+        </Button>
+      )}
+      {valeur === "0" && !modifie && <span className="text-xs">(relance possible à tout moment)</span>}
+    </form>
   )
 }
 

@@ -7,6 +7,7 @@
 #   POST /api/fichiers  -> contenu de contacts.csv et des textes Mail1..4 d'une campagne
 #   PUT  /api/contacts  -> enregistre contacts.csv (UTF-8 avec BOM, separateur ;)
 #   PUT  /api/texte     -> enregistre Textes\MailN.txt
+#   PUT  /api/parametres -> enregistre les reglages de la campagne (delai avant relance)
 #   POST /api/ouvrir    -> ouvre le dossier de la campagne dans l'Explorateur
 #   POST /api/campagnes -> cree une campagne a partir de "_Modele campagne"
 #
@@ -210,6 +211,21 @@ try {
                     $contenu = (([string]$corps.contenu) -replace "`r`n", "`n") -replace "`n", "`r`n"
                     Write-FichierCampagne -Chemin $f -Contenu $contenu
                     Write-Host "$(Get-Date -Format HH:mm:ss) Texte Mail$etape enregistre - $($corps.campagne)"
+                    Send-Json $ctx 200 @{ ok = $true }
+                    continue
+                }
+
+                if ($chemin -eq "/api/parametres" -and $req.HttpMethod -eq "PUT") {
+                    # Reglages propres a une campagne (parametres.json) : delai avant relance
+                    $corps = Read-Corps $req
+                    $dossier = Get-DossierCampagne $corps.campagne
+                    $delai = $corps.delaiRelanceJours -as [int]
+                    if (-not $dossier -or $null -eq $delai -or $delai -lt 0 -or $delai -gt 90) {
+                        Send-Json $ctx 400 @{ erreur = "Delai invalide (entre 0 et 90 jours)." }; continue
+                    }
+                    $json = [pscustomobject]@{ DelaiRelanceJours = $delai } | ConvertTo-Json
+                    Write-FichierCampagne -Chemin (Join-Path $dossier "parametres.json") -Contenu $json
+                    Write-Host "$(Get-Date -Format HH:mm:ss) Delai avant relance : $delai jour(s) - $($corps.campagne)"
                     Send-Json $ctx 200 @{ ok = $true }
                     continue
                 }

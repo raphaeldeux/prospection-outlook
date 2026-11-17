@@ -1,5 +1,22 @@
 # Fonctions partagees par les scripts (charge par ". $PSScriptRoot\Commun.ps1").
 
+# Delai minimal (en jours) entre deux mails d'une sequence, si la campagne n'en definit pas.
+$DelaiRelanceParDefaut = 3
+
+function Get-DelaiRelance {
+    # Delai avant relance propre a la campagne : fichier parametres.json du dossier de campagne
+    # (modifiable dans l'interface). 0 = relance possible des le jour du dernier envoi.
+    param([string]$Dossier)
+    $f = Join-Path $Dossier "parametres.json"
+    if (Test-Path $f) {
+        try {
+            $p = Get-Content $f -Raw -Encoding UTF8 | ConvertFrom-Json
+            if ($null -ne $p.DelaiRelanceJours -and [int]$p.DelaiRelanceJours -ge 0) { return [int]$p.DelaiRelanceJours }
+        } catch {}
+    }
+    return $DelaiRelanceParDefaut
+}
+
 function Get-ItemsParObjet {
     # Renvoie les elements d'un dossier Outlook dont l'objet COMMENCE par l'un des prefixes donnes.
     # Le filtre est execute par Outlook lui-meme (Restrict + requete DASL), ce qui evite de parcourir
