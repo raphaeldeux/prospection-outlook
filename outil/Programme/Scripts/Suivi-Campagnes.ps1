@@ -46,7 +46,17 @@ if ($Campagne) {
         Where-Object { $_.Name -notlike "_*" -and (Test-Path (Join-Path $_.FullName "contacts.csv")) } |
         Sort-Object Name)
 }
-if ($dossiers.Count -eq 0) { throw "Aucune campagne trouvee." }
+if ($dossiers.Count -eq 0) {
+    # pas encore de campagne : ce n'est pas une erreur. L'interface affiche son ecran d'accueil
+    # ("Lance ta premiere campagne") ; inutile de se connecter a Outlook.
+    if ($JsonPath) {
+        $vide = [pscustomobject]@{ GenereLe = (Get-Date).ToString("dd/MM/yyyy HH:mm"); Campagnes = @() }
+        [System.IO.File]::WriteAllText($JsonPath, ($vide | ConvertTo-Json -Depth 3), (New-Object System.Text.UTF8Encoding $false))
+    } else {
+        Write-Host "Pas encore de campagne a suivre. Cree ta premiere campagne depuis l'interface (Prospection Outlook)."
+    }
+    return
+}
 
 function Get-IndexParAdresse {
     # Range des mails Outlook par adresse destinataire (ou expediteur si -ParExpediteur), pour retrouver
