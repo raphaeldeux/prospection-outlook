@@ -104,6 +104,7 @@ function Get-SignatureDepuisDisque {
 # le texte de chaque contact est verifie dans la boucle ([A COMPLETER], absent)
 $bodyTemplate = if (Test-Path $bodyPath) { Get-Content -Path $bodyPath -Raw -Encoding UTF8 } else { "" }
 $textesPerso = Get-TextesPersonnalises $Campagne
+[void](Complete-ObjetsVides $Campagne)   # contacts saisis dans le CSV sans objet : objets communs
 $contacts = @(Import-Csv -Path $csvPath -Delimiter ';' -Encoding UTF8)  # @() force un tableau meme avec 1 seule ligne
 
 Write-Host "Connexion a Outlook..."

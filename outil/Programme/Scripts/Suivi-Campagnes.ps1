@@ -93,6 +93,10 @@ try {
 $ns = $outlook.GetNamespace("MAPI")
 $limite = (Get-Date).AddDays(-$JoursHistorique)
 
+# contacts saisis dans contacts.csv sans aucun objet : objets communs de la campagne (cf. Commun.ps1), pour que le
+# suivi les affiche comme les autres. Seule ecriture du suivi ; un fichier ouvert dans Excel est simplement laisse tel quel.
+foreach ($dossier in $dossiers) { try { [void](Complete-ObjetsVides $dossier.FullName) } catch { Write-Warning "$($dossier.Name) : $($_.Exception.Message)" } }
+
 # tous les objets (SujetN, variables resolues) de toutes les campagnes : seuls ces mails sont lus
 $prefixes = @(foreach ($dossier in $dossiers) {
     foreach ($contact in @(Import-Csv -Path (Join-Path $dossier.FullName "contacts.csv") -Delimiter ';' -Encoding UTF8)) {

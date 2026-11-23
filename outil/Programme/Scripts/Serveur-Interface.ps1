@@ -48,6 +48,7 @@ $scripts    = $PSScriptRoot
 $campagnes  = Join-Path $racine "Campagnes"
 $appDir     = Join-Path $programme "Interface\app"
 $utf8       = New-Object System.Text.UTF8Encoding $false
+. (Join-Path $scripts "Commun.ps1")   # Complete-ObjetsVides (objets communs des contacts saisis sans objet)
 
 if (-not (Test-Path (Join-Path $appDir "index.html"))) {
     throw "Interface introuvable ($appDir\index.html). Retelecharge l'outil complet, ou compile-la depuis le dossier interface\ du depot avec : npm run build"
@@ -326,6 +327,9 @@ try {
                     $corps = Read-Corps $req
                     $dossier = Get-DossierCampagne $corps.campagne
                     if (-not $dossier) { Send-Json $ctx 400 @{ erreur = "Campagne invalide." }; continue }
+                    # contacts ajoutes a la main dans le CSV sans objet : objets communs (sinon "personnalises" et ignores)
+                    $nbCompletes = Complete-ObjetsVides $dossier
+                    if ($nbCompletes -gt 0) { Write-Host "$(Get-Date -Format HH:mm:ss) Objets communs donnes a $nbCompletes contact(s) - $($corps.campagne)" }
                     $csv = Join-Path $dossier "contacts.csv"
                     $entete = @((Get-Content $csv -Encoding UTF8 -TotalCount 1) -split ';' | ForEach-Object { $_.Trim('"') } | Where-Object { $_ })
                     $colonnes = @($colonnesStandard) + @($entete | Where-Object { $_ -notin $colonnesStandard })

@@ -120,6 +120,57 @@ function Resolve-Variables {
         Replace('{{ENTREPRISE}}', [string]$Contact.Entreprise)
 }
 
+function Complete-ObjetsVides {
+    # Contacts ajoutes a la main dans contacts.csv (Excel...) : leurs colonnes Sujet1..Sujet4 sont toutes vides,
+    # alors qu'un contact ajoute depuis l'interface recoit les objets communs. Sans objet, le contact etait
+    # ignore (aucun brouillon) et affiche comme "personnalise". On lui donne donc les objets communs, comme
+    # l'interface. Seules les lignes dont les 4 objets sont vides sont completees : un objet vide sur une ligne
+    # qui en a d'autres est voulu (il arrete la sequence a cette etape) et n'est pas touche.
+    # Objet commun = celui memorise pour la campagne (parametres.json, Objets), sinon le plus frequent.
+    # Renvoie le nombre de contacts completes (0 = fichier inchange) ; fichier verrouille : avertissement, -1.
+    param([string]$Dossier)
+    $csv = Join-Path $Dossier "contacts.csv"
+    if (-not (Test-Path $csv)) { return 0 }
+    try { $contacts = @(Import-Csv -Path $csv -Delimiter ';' -Encoding UTF8) } catch { return -1 }   # illisible : rien a faire ici
+    $aCompleter = @($contacts | Where-Object {
+        $c = $_
+        ([string]$c.Email).Trim() -and -not (@(1..4 | Where-Object { ([string]$c."Sujet$_").Trim() }))
+    })
+    if ($aCompleter.Count -eq 0) { return 0 }
+
+    $memorises = $null
+    $f = Join-Path $Dossier "parametres.json"
+    if (Test-Path $f) { try { $memorises = (Get-Content $f -Raw -Encoding UTF8 | ConvertFrom-Json).Objets } catch {} }
+    $communs = @($null) + @(foreach ($n in 1..4) {
+        $m = if ($memorises -and @($memorises).Count -ge $n) { @($memorises)[$n - 1] } else { $null }
+        if ($m -is [string]) { $m.Trim() }
+        else {
+            $plusFrequent = $contacts | ForEach-Object { ([string]$_."Sujet$n").Trim() } | Where-Object { $_ } |
+                Group-Object -NoElement | Sort-Object Count -Descending | Select-Object -First 1
+            if ($plusFrequent) { $plusFrequent.Name } else { "" }
+        }
+    })
+    if (-not $communs[1]) { return 0 }   # pas d'objet commun pour Mail1 : rien a donner
+
+    foreach ($c in $aCompleter) {
+        foreach ($n in 1..4) { $c | Add-Member -NotePropertyName "Sujet$n" -NotePropertyValue $communs[$n] -Force }
+    }
+    # Reecriture au meme format que l'interface (Serveur-Interface.ps1) : ; separateur, UTF-8 avec BOM, ordre des colonnes garde
+    $entete = @((Get-Content $csv -Encoding UTF8 -TotalCount 1) -split ';' | ForEach-Object { $_.Trim('"') } | Where-Object { $_ })
+    $colonnes = @($entete) + @(1..4 | ForEach-Object { "Sujet$_" } | Where-Object { $_ -notin $entete })
+    $champ = { param($v) $v = ([string]$v) -replace "[\r\n]+", " "; if ($v -match '[;"]') { '"' + ($v -replace '"', '""') + '"' } else { $v } }
+    $lignes = @((($colonnes | ForEach-Object { & $champ $_ }) -join ';'))
+    foreach ($c in $contacts) { $lignes += (($colonnes | ForEach-Object { & $champ $c.$_ }) -join ';') }
+    try {
+        [IO.File]::WriteAllText($csv, (($lignes -join "`r`n") + "`r`n"), (New-Object System.Text.UTF8Encoding $true))
+    } catch [System.IO.IOException] {
+        Write-Warning "contacts.csv est ouvert dans Excel : impossible d'y ajouter les objets communs des $($aCompleter.Count) contact(s) sans objet. Ferme-le puis relance."
+        return -1
+    }
+    Write-Host "Objets communs ajoutes a $($aCompleter.Count) contact(s) saisi(s) sans objet dans contacts.csv."
+    return $aCompleter.Count
+}
+
 function Get-SujetsEtapes {
     # Objets des 4 etapes pour un contact, variables resolues : tableau indexe 1..4 (indice 0 inutilise)
     param($Contact)

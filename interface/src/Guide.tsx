@@ -240,7 +240,8 @@ export function Guide() {
             </p>
             <ul className="list-disc space-y-1 pl-5">
               <li>
-                <strong>Un objet vide</strong> arrête la séquence à cette étape (par exemple : pas de Mail4).
+                <strong>Un objet vide</strong> arrête la séquence à cette étape (par exemple : pas de Mail4). Exception : un
+                contact qui n'a aucun objet (ligne ajoutée à la main dans le CSV) reçoit les objets communs.
               </li>
               <li>
                 <strong>Chaque étape doit avoir un objet différent</strong>, par exemple en ajoutant « Re: » devant : l'outil
@@ -273,6 +274,11 @@ export function Guide() {
             <Astuce>
               Dans le tableau, colle un bloc copié depuis Excel directement dans une case : il remplit les cases suivantes comme
               dans Excel. <strong>Entrée</strong> passe à la ligne suivante.
+            </Astuce>
+            <Astuce>
+              Tu peux aussi ajouter des lignes directement dans <Code>contacts.csv</Code> (Excel), en laissant vides les
+              colonnes Sujet1 à Sujet4 : à l'ouverture de la campagne, ces contacts reçoivent les objets communs, comme s'ils
+              avaient été ajoutés ici. Seules les lignes sans <strong>aucun</strong> objet sont complétées.
             </Astuce>
             <div className="overflow-x-auto border-y">
               <table className="w-full text-sm">
