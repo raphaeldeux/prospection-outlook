@@ -96,6 +96,7 @@ $inboxItems = @(Get-ReponsesRecues -Namespace $ns -Adresses @($contacts | ForEac
 
 $seuilDate = (Get-Date).AddDays(-$MinJours)
 $mesAdresses = Get-MesAdresses -Namespace $ns
+$ccCampagne = Get-CcCampagne $Campagne   # adresses en copie de tous les mails (parametres.json)
 $issues = Get-Issues $Campagne   # contacts clos par le commercial (RDV, pas interesse...) : plus de relance
 
 for ($i = 0; $i -lt $contacts.Count; $i++) {
@@ -199,11 +200,12 @@ for ($i = 0; $i -lt $contacts.Count; $i++) {
         Write-Host "[$($contact.Nom)] ATTENTION : Outlook n'a pas pu valider l'adresse '$email' - verifie-la dans le brouillon." -ForegroundColor Yellow
     }
 
+    $nbCc = Add-DestinatairesCc -Mail $reply -Contact $contact -CcCampagne $ccCampagne
     $reply.Subject = $sujetSuffixe
     Set-CorpsAvantSignature -MailItem $reply -BodyHtml $relanceHtml
     $reply.Save()
 
-    Write-Host "[$($contact.Nom)] Mail$Etape cree (brouillon, $($modele.Source)) - objet : $sujetPropre - repond a l'envoi du $($dernierEnvoye.SentOn)."
+    Write-Host "[$($contact.Nom)] Mail$Etape cree (brouillon, $($modele.Source)) - objet : $sujetPropre$(if ($nbCc) { " - $nbCc en copie" }) - repond a l'envoi du $($dernierEnvoye.SentOn)."
 }
 
 Write-Host "Termine. Verifie le dossier Brouillons d'Outlook."

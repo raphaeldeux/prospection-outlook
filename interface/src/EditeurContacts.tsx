@@ -15,7 +15,7 @@ import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { ImportContacts } from "@/ImportContacts"
 import { enregistrerContacts, type LigneContact } from "@/lib/api"
-import { estColonneObjet, estEmailValide, objetDeCampagne } from "@/lib/apercu"
+import { ccInvalide, estColonneObjet, estEmailValide, objetDeCampagne } from "@/lib/apercu"
 import { normaliserCivilite } from "@/lib/import"
 import { cn } from "@/lib/utils"
 
@@ -26,6 +26,7 @@ const libelleColonne: Record<string, string> = {
   Entreprise: "Entreprise",
   Telephone: "Téléphone",
   Email: "E-mail",
+  CC: "En copie (CC)",
   Sujet1: "Objet Mail1",
   Sujet2: "Objet Mail2",
   Sujet3: "Objet Mail3",
@@ -38,7 +39,9 @@ const largeur: Record<string, string> = {
   Entreprise: "w-44",
   Telephone: "w-32",
   Email: "min-w-80",
+  CC: "min-w-64",
 }
+
 
 const ligneVide = (colonnes: string[]): LigneContact => Object.fromEntries(colonnes.map((c) => [c, ""]))
 
@@ -85,6 +88,7 @@ export function EditeurContacts(props: {
     [lignes],
   )
   const nbErreurs = erreurs.filter(Boolean).length
+  const nbCcInvalides = lignes.filter((l) => ccInvalide(l.CC ?? "")).length
   const doublons = useMemo(() => {
     const vus = new Map<string, number>()
     lignes.forEach((l) => l.Email && vus.set(l.Email.trim().toLowerCase(), (vus.get(l.Email.trim().toLowerCase()) ?? 0) + 1))
@@ -216,11 +220,12 @@ export function EditeurContacts(props: {
         </Button>
       </div>
 
-      {(nbErreurs > 0 || doublons.size > 0) && (
+      {(nbErreurs > 0 || doublons.size > 0 || nbCcInvalides > 0) && (
         <p className="flex items-center gap-1.5 text-sm text-amber-700 dark:text-amber-300">
           <TriangleAlertIcon className="size-4" />
           {nbErreurs > 0 && `${nbErreurs} adresse(s) e-mail invalide(s) ou manquante(s), en rouge. `}
-          {doublons.size > 0 && `${doublons.size} adresse(s) en double.`}
+          {doublons.size > 0 && `${doublons.size} adresse(s) en double. `}
+          {nbCcInvalides > 0 && `${nbCcInvalides} case(s) « En copie » avec une adresse invalide (sépare plusieurs adresses par ;).`}
         </p>
       )}
 
@@ -272,7 +277,9 @@ export function EditeurContacts(props: {
                 <tr key={i} className="border-b last:border-0 hover:bg-muted/30">
                   <td className="px-2 text-xs text-muted-foreground tabular-nums">{i + 1}</td>
                   {colonnesAffichees.map((c) => {
-                    const invalide = c === "Email" && (erreurs[i] || doublons.has((l.Email ?? "").trim().toLowerCase()))
+                    const invalide =
+                      (c === "Email" && (erreurs[i] || doublons.has((l.Email ?? "").trim().toLowerCase()))) ||
+                      (c === "CC" && ccInvalide(l.CC ?? ""))
                     const risque = risques.get(i)?.cols.has(c)
                     return (
                       <td
@@ -302,6 +309,7 @@ export function EditeurContacts(props: {
                             value={l[c] ?? ""}
                             onChange={(e) => modifier(i, c, e.target.value)}
                             aria-invalid={invalide || undefined}
+                            placeholder={c === "CC" ? "adresse ; adresse…" : undefined}
                             className="h-7 border-transparent bg-transparent px-1.5 shadow-none hover:border-input"
                           />
                         )}

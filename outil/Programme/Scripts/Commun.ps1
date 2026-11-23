@@ -17,6 +17,43 @@ function Get-DelaiRelance {
     return $DelaiRelanceParDefaut
 }
 
+function Split-Adresses {
+    # "a@x.fr; b@y.fr, c@z.fr" -> @("a@x.fr", "b@y.fr", "c@z.fr") (separateurs ; , espace, retour a la ligne)
+    param([string]$Texte)
+    return @(([string]$Texte) -split '[;,\s]+' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+}
+
+function Get-CcCampagne {
+    # Adresses mises en copie de TOUS les mails de la campagne (parametres.json, champ Cc ; reglable dans l'interface)
+    param([string]$Dossier)
+    $f = Join-Path $Dossier "parametres.json"
+    if (Test-Path $f) {
+        try { return (Split-Adresses ([string](Get-Content $f -Raw -Encoding UTF8 | ConvertFrom-Json).Cc)) } catch {}
+    }
+    return @()
+}
+
+function Add-DestinatairesCc {
+    # Met en copie (CC) d'un brouillon les adresses de la campagne + celles de la colonne CC du contact.
+    # Recipients.Add + Resolve() comme pour le destinataire principal (adresse validee par Outlook).
+    # L'adresse du contact lui-meme et les doublons sont ignores. Renvoie le nombre d'adresses ajoutees.
+    param($Mail, $Contact, [string[]]$CcCampagne)
+    $principal = ([string]$Contact.Email).Trim().ToLower()
+    $deja = @{}
+    foreach ($a in @($CcCampagne) + @(Split-Adresses $Contact.CC)) {
+        if (-not $a) { continue }
+        $cle = $a.ToLower()
+        if ($cle -eq $principal -or $deja.ContainsKey($cle)) { continue }
+        $deja[$cle] = $true
+        $r = $Mail.Recipients.Add($a)
+        $r.Type = 2  # olCC
+        if (-not $r.Resolve()) {
+            Write-Host "[$($Contact.Nom)] ATTENTION : Outlook n'a pas pu valider l'adresse en copie '$a' - verifie-la dans le brouillon." -ForegroundColor Yellow
+        }
+    }
+    return $deja.Count
+}
+
 function Get-Issues {
     # Issue renseignee par le commercial pour chaque contact (RDV obtenu, pas interesse...), fichier
     # issues.json du dossier de campagne : { "adresse@x.fr": { "Issue": "rdv", "Note": "...", "Le": "jj/mm/aaaa" } }.

@@ -121,6 +121,7 @@ $draftItems = Get-ItemsParObjet -Folder $ns.GetDefaultFolder(16) -Prefixes $pref
 Write-Host "Lecture de la signature Outlook sur le disque..."
 $signatureHtml = Get-SignatureDepuisDisque -Outlook $outlook
 
+$ccCampagne = Get-CcCampagne $Campagne   # adresses en copie de tous les mails (parametres.json)
 $issues = Get-Issues $Campagne   # contacts clos par le commercial (RDV, pas interesse...) : rien a preparer
 
 for ($i = 0; $i -lt $contacts.Count; $i++) {
@@ -176,11 +177,12 @@ for ($i = 0; $i -lt $contacts.Count; $i++) {
     if (-not $recip.Resolve()) {
         Write-Host "[$($contact.Nom)] ATTENTION : Outlook n'a pas pu valider l'adresse '$email' - verifie-la dans le brouillon." -ForegroundColor Yellow
     }
+    $nbCc = Add-DestinatairesCc -Mail $mail -Contact $contact -CcCampagne $ccCampagne
     $mail.Subject = $sujetSuffixe
     $mail.HTMLBody = Set-CorpsAvantSignature -HtmlSignature $signatureHtml -BodyHtml $bodyHtml
     $mail.Save()
 
-    Write-Host "[$($contact.Nom)] Mail1 cree (brouillon, $($modele.Source)) - objet : $sujetPropre"
+    Write-Host "[$($contact.Nom)] Mail1 cree (brouillon, $($modele.Source)) - objet : $sujetPropre$(if ($nbCc) { " - $nbCc en copie" })"
 }
 
 Write-Host "Termine. Verifie le dossier Brouillons d'Outlook."

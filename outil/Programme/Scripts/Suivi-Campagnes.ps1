@@ -222,6 +222,7 @@ if ($JsonPath) {
         [pscustomobject]@{
             Nom      = $dossier.Name
             DelaiRelance = $delais[$dossier.Name]
+            Cc       = (Get-CcCampagne $dossier.FullName) -join '; '
             Textes   = @($textes)
             Contacts = @($resultats | Where-Object Campagne -eq $dossier.Name | Select-Object * -ExcludeProperty Campagne)
         }

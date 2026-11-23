@@ -154,7 +154,7 @@ function Get-DossierCampagne {
     return $null
 }
 
-$colonnesStandard = @("Civilite", "Prenom", "Nom", "Entreprise", "Telephone", "Email", "Sujet1", "Sujet2", "Sujet3", "Sujet4")
+$colonnesStandard = @("Civilite", "Prenom", "Nom", "Entreprise", "Telephone", "Email", "CC", "Sujet1", "Sujet2", "Sujet3", "Sujet4")
 $utf8Bom = New-Object System.Text.UTF8Encoding $true   # BOM : Excel affiche correctement les accents
 
 function Read-TextesPersonnalises {
@@ -439,17 +439,28 @@ try {
                 }
 
                 if ($chemin -eq "/api/parametres" -and $req.HttpMethod -eq "PUT") {
-                    # Reglages propres a une campagne (parametres.json) : delai avant relance
+                    # Reglages propres a une campagne (parametres.json) : delai avant relance et/ou adresses
+                    # en copie de tous les mails (cc). Seuls les champs envoyes sont modifies.
                     $corps = Read-Corps $req
                     $dossier = Get-DossierCampagne $corps.campagne
+                    if (-not $dossier) { Send-Json $ctx 400 @{ erreur = "Campagne invalide." }; continue }
+                    $aDelai = $corps.PSObject.Properties.Name -contains "delaiRelanceJours"
+                    $aCc = $corps.PSObject.Properties.Name -contains "cc"
                     $delai = $corps.delaiRelanceJours -as [int]
-                    if (-not $dossier -or $null -eq $delai -or $delai -lt 0 -or $delai -gt 90) {
+                    if ($aDelai -and ($null -eq $delai -or $delai -lt 0 -or $delai -gt 90)) {
                         Send-Json $ctx 400 @{ erreur = "Delai invalide (entre 0 et 90 jours)." }; continue
                     }
+                    $cc = @(([string]$corps.cc) -split '[;,\s]+' | Where-Object { $_ } | Select-Object -Unique)   # comme Split-Adresses (Commun.ps1)
+                    $invalides = @($cc | Where-Object { $_ -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$' })
+                    if ($aCc -and $invalides.Count) {
+                        Send-Json $ctx 400 @{ erreur = "Adresse(s) en copie invalide(s) : $($invalides -join ', ')" }; continue
+                    }
                     $p = Read-Parametres $dossier
-                    $p["DelaiRelanceJours"] = $delai
+                    if ($aDelai) { $p["DelaiRelanceJours"] = $delai }
+                    if ($aCc) { $p["Cc"] = ($cc -join '; ') }
                     Save-Parametres $dossier $p
-                    Write-Host "$(Get-Date -Format HH:mm:ss) Delai avant relance : $delai jour(s) - $($corps.campagne)"
+                    if ($aDelai) { Write-Host "$(Get-Date -Format HH:mm:ss) Delai avant relance : $delai jour(s) - $($corps.campagne)" }
+                    if ($aCc) { Write-Host "$(Get-Date -Format HH:mm:ss) Copie de tous les mails : $(if ($cc.Count) { $cc -join '; ' } else { 'personne' }) - $($corps.campagne)" }
                     Send-Json $ctx 200 @{ ok = $true }
                     continue
                 }

@@ -281,6 +281,10 @@ export function Guide() {
                   <tr><td className="text-foreground">Entreprise</td><td>Variable {"{{ENTREPRISE}}"}</td></tr>
                   <tr><td className="text-foreground">Téléphone</td><td>Facultatif, pour mémoire</td></tr>
                   <tr><td className="text-foreground">E-mail</td><td>Obligatoire ; en rouge si invalide ou en double</td></tr>
+                  <tr>
+                    <td className="text-foreground">En copie (CC)</td>
+                    <td>Facultatif : adresses mises en copie des mails de ce contact (plusieurs adresses séparées par ;)</td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -417,6 +421,12 @@ export function Guide() {
             <p>
               Mets <strong>0</strong> pour pouvoir relancer à tout moment : c'est alors toi qui décides en cliquant sur « Créer
               les brouillons ».
+            </p>
+            <p>
+              Juste en dessous, « En copie de tous les mails » : les adresses indiquées (un collègue, un manager…, séparées par
+              ;) sont mises en <strong>copie (CC)</strong> de tous les brouillons de la campagne, Mail1 et relances. Pour une
+              copie propre à un contact, remplis plutôt sa colonne « En copie (CC) » dans l'onglet Contacts ; les deux
+              s'additionnent. Le réglage s'applique aux brouillons créés ensuite, pas à ceux qui existent déjà.
             </p>
           </Section>
 

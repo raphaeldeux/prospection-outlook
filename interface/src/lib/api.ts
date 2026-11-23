@@ -33,6 +33,8 @@ export type Campagne = {
   Nom: string
   /** Délai minimal (jours) entre deux mails, réglable par campagne */
   DelaiRelance: number
+  /** Adresses mises en copie de tous les mails de la campagne (« a@x.fr; b@y.fr »), vide si aucune */
+  Cc?: string
   Textes: { Etape: number; Etat: EtatTexte }[]
   Contacts: Contact[]
 }
@@ -149,6 +151,13 @@ export async function creerCampagne(nom: string) {
 export async function enregistrerDelai(campagne: string, delaiRelanceJours: number) {
   return lire<{ ok: boolean }>(
     await fetch("/api/parametres", { method: "PUT", headers: entetes, body: JSON.stringify({ campagne, delaiRelanceJours }) }),
+  )
+}
+
+/** Adresses mises en copie de tous les mails de la campagne (texte vide = personne) */
+export async function enregistrerCc(campagne: string, cc: string) {
+  return lire<{ ok: boolean }>(
+    await fetch("/api/parametres", { method: "PUT", headers: entetes, body: JSON.stringify({ campagne, cc }) }),
   )
 }
 

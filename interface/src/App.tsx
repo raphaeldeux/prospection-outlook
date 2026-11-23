@@ -13,6 +13,7 @@ import {
   RefreshCwIcon,
   SaveIcon,
   TimerIcon,
+  CopyIcon,
   PenLineIcon,
   TriangleAlertIcon,
   UsersIcon,
@@ -49,6 +50,7 @@ import {
   chargerVersion,
   chargerSuivi,
   creerCampagne,
+  enregistrerCc,
   enregistrerDelai,
   etapeSuivante,
   genererBrouillons,
@@ -59,6 +61,7 @@ import {
   type Fichiers,
   type Suivi,
 } from "@/lib/api"
+import { ccInvalide, decouperAdresses } from "@/lib/apercu"
 import { cn } from "@/lib/utils"
 import { StatutBadge, statuts } from "@/StatutBadge"
 
@@ -518,6 +521,7 @@ function VueCampagne(props: {
           </h1>
           <p className="text-sm text-muted-foreground">{contacts.length} contact(s)</p>
           <ReglageDelai key={campagne.Nom} campagne={campagne.Nom} delai={campagne.DelaiRelance} onEnregistre={props.onActualiser} />
+          <ReglageCc key={`cc-${campagne.Nom}`} campagne={campagne.Nom} cc={campagne.Cc ?? ""} onEnregistre={props.onActualiser} />
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <DerniereActualisation genereLe={suivi.GenereLe} chargement={chargement} />
@@ -777,6 +781,57 @@ function ReglageDelai(props: { campagne: string; delai: number; onEnregistre: ()
         </Button>
       )}
       {valeur === "0" && !modifie && <span className="text-xs">(relance possible à tout moment)</span>}
+    </form>
+  )
+}
+
+/** Adresses mises en copie (CC) de tous les brouillons de la campagne, en plus de la colonne « En copie » des contacts */
+function ReglageCc(props: { campagne: string; cc: string; onEnregistre: () => void }) {
+  const [valeur, setValeur] = useState(props.cc)
+  const [sauvegarde, setSauvegarde] = useState(false)
+  const normaliser = (t: string) => decouperAdresses(t).join("; ")
+  const invalide = ccInvalide(valeur)
+  const modifie = !invalide && normaliser(valeur) !== normaliser(props.cc)
+
+  async function enregistrer() {
+    setSauvegarde(true)
+    try {
+      await enregistrerCc(props.campagne, normaliser(valeur))
+      const n = decouperAdresses(valeur).length
+      toast.success(n === 0 ? "Plus personne en copie des mails" : `${n} adresse(s) en copie de tous les mails de la campagne`)
+      setValeur(normaliser(valeur))
+      props.onEnregistre()
+    } catch (e) {
+      toast.error((e as Error).message)
+    } finally {
+      setSauvegarde(false)
+    }
+  }
+
+  return (
+    <form
+      className="mt-1.5 flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground"
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (modifie) void enregistrer()
+      }}
+    >
+      <CopyIcon className="size-4" />
+      <span>En copie de tous les mails</span>
+      <Input
+        value={valeur}
+        onChange={(e) => setValeur(e.target.value)}
+        placeholder="personne (adresses séparées par ;)"
+        aria-invalid={invalide || undefined}
+        className="h-7 w-80 max-w-full px-2"
+        aria-label="Adresses en copie de tous les mails de la campagne"
+      />
+      {modifie && (
+        <Button type="submit" size="sm" disabled={sauvegarde}>
+          {sauvegarde ? <Loader2Icon className="animate-spin" /> : <SaveIcon />} Enregistrer
+        </Button>
+      )}
+      {invalide && <span className="text-xs text-destructive">adresse invalide</span>}
     </form>
   )
 }

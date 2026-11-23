@@ -44,6 +44,11 @@ export function texteVersHtml(texte: string) {
 
 export const estEmailValide = (e: string) => /^[^\s@;]+@[^\s@;]+\.[a-z]{2,}$/i.test(e.trim())
 
+/** Adresses d'un champ « En copie » (séparées par ; , ou espace), comme Split-Adresses côté scripts */
+export const decouperAdresses = (texte: string) => texte.split(/[;,\s]+/).map((a) => a.trim()).filter(Boolean)
+/** Vrai si une des adresses en copie est mal formée (champ vide = valide) */
+export const ccInvalide = (texte: string) => decouperAdresses(texte).some((a) => !estEmailValide(a))
+
 /** Objet commun d'une étape = l'objet le plus fréquent parmi les contacts (les autres ont un objet personnalisé) */
 export function objetCommun(contacts: LigneContact[], etape: number) {
   const n = new Map<string, number>()
