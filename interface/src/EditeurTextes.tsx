@@ -61,13 +61,32 @@ export function EditeurTextes(props: {
   const { campagne, etape, setEtape } = props
 
   // Textes enregistrés et en cours d'édition, par (cible, étape). Une clé absente pour un contact = il reçoit le texte commun.
-  const [enregistres, setEnregistres] = useState<Record<string, string>>(() => {
+  const lireTextes = () => {
     const r: Record<string, string> = {}
     for (const n of [1, 2, 3, 4]) r[cle("", n)] = props.textes.find((t) => t.etape === n)?.contenu ?? ""
     for (const p of props.personnalises) r[cle(normaliser(p.email), p.etape)] = p.contenu
     return r
-  })
+  }
+  const [enregistres, setEnregistres] = useState<Record<string, string>>(lireTextes)
   const [brouillons, setBrouillons] = useState<Record<string, string>>(enregistres)
+
+  // Textes relus sur le disque (bouton Actualiser, fichier modifié hors de l'outil) : on reprend la nouvelle version,
+  // sauf pour les textes en cours de modification ici, qui sont gardés tels quels.
+  const textesRecus = JSON.stringify([props.textes, props.personnalises])
+  useEffect(() => {
+    const nouveaux = lireTextes()
+    if (JSON.stringify(nouveaux) === JSON.stringify(enregistres)) return
+    setBrouillons((b) => {
+      const r: Record<string, string> = {}
+      for (const c of new Set([...Object.keys(b), ...Object.keys(nouveaux)])) {
+        const enCours = b[c] !== enregistres[c]
+        const v = enCours ? b[c] : nouveaux[c]
+        if (v !== undefined) r[c] = v
+      }
+      return r
+    })
+    setEnregistres(nouveaux)
+  }, [textesRecus]) // eslint-disable-line react-hooks/exhaustive-deps
   // Objets propres à un contact en cours d'édition (la valeur enregistrée est dans contacts.csv, colonne SujetN)
   const [objetsEdites, setObjetsEdites] = useState<Record<string, string>>({})
   const [objetsEnregistres, setObjetsEnregistres] = useState<Record<string, string>>({})

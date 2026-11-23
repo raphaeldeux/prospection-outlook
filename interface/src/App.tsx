@@ -466,6 +466,7 @@ function VueCampagne(props: {
     })
     return r
   }, [contacts])
+  /** Après un enregistrement, et bouton Actualiser : relit contacts.csv et les textes, puis le suivi Outlook */
   const apresEnregistrement = () => {
     setVersion((v) => v + 1)
     props.onActualiser()
@@ -525,7 +526,7 @@ function VueCampagne(props: {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <DerniereActualisation genereLe={suivi.GenereLe} chargement={chargement} />
-          <Button variant="outline" onClick={props.onActualiser} disabled={chargement}>
+          <Button variant="outline" onClick={apresEnregistrement} disabled={chargement} title="Relit Outlook, contacts.csv et les textes">
             <RefreshCwIcon className={cn(chargement && "animate-spin")} /> Actualiser
           </Button>
           <Button variant="outline" onClick={props.onOuvrirDossier}><FolderOpenIcon /> Dossier</Button>
