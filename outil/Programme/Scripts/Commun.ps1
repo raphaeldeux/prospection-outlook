@@ -181,12 +181,14 @@ function Get-EtapeDuSujet {
     # Renvoie l'etape (1-4) dont l'objet correspond le mieux a l'objet d'un mail (prefixe le plus long), 0 sinon.
     # Le "plus long" evite qu'un Sujet1 qui serait le debut d'un Sujet2 (ou l'inverse) capte les mails
     # de l'autre etape. Comparaison "commence par" : l'objet reel porte un suffixe invisible.
+    # Insensible a la casse : une majuscule changee a la main dans Outlook avant l'envoi ("Sante" -> "sante")
+    # ne doit pas faire perdre le mail (le filtre Outlook, LIKE, l'est deja).
     param([string]$Sujet, [string[]]$SujetsEtapes)
     $meilleure = 0; $longueur = -1
     for ($n = 1; $n -le 4; $n++) {
         $s = $SujetsEtapes[$n]
         if ([string]::IsNullOrWhiteSpace($s)) { continue }
-        if ($Sujet.StartsWith($s, [StringComparison]::Ordinal) -and $s.Length -gt $longueur) { $meilleure = $n; $longueur = $s.Length }
+        if ($Sujet.StartsWith($s, [StringComparison]::OrdinalIgnoreCase) -and $s.Length -gt $longueur) { $meilleure = $n; $longueur = $s.Length }
     }
     return $meilleure
 }
@@ -254,7 +256,7 @@ function Test-SujetsAmbigus {
     # resolues) : les mails des deux etapes seraient indiscernables. $null si tout va bien.
     param([string[]]$SujetsEtapes, [int]$Etape)
     for ($n = 1; $n -le 4; $n++) {
-        if ($n -ne $Etape -and -not [string]::IsNullOrWhiteSpace($SujetsEtapes[$n]) -and $SujetsEtapes[$n] -ceq $SujetsEtapes[$Etape]) {
+        if ($n -ne $Etape -and -not [string]::IsNullOrWhiteSpace($SujetsEtapes[$n]) -and $SujetsEtapes[$n] -eq $SujetsEtapes[$Etape]) {
             return "objet identique a celui du Mail$n (donne un objet different a chaque etape)"
         }
     }
