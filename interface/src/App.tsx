@@ -555,6 +555,7 @@ function VueCampagne(props: {
               contacts={fichiers.contacts}
               objets={fichiers.objets}
               campagneDemarree={campagneDemarree}
+              ccCampagne={campagne.Cc ?? ""}
               envois={envois}
               onEnregistre={apresEnregistrement}
               onModifie={(m) => props.onModifie("contacts", m)}
@@ -786,7 +787,7 @@ function ReglageDelai(props: { campagne: string; delai: number; onEnregistre: ()
   )
 }
 
-/** Adresses mises en copie (CC) de tous les brouillons de la campagne, en plus de la colonne « En copie » des contacts */
+/** Adresses mises en copie (CC) de tous les brouillons de la campagne, en plus de la colonne « CC de ce contact » */
 function ReglageCc(props: { campagne: string; cc: string; onEnregistre: () => void }) {
   const [valeur, setValeur] = useState(props.cc)
   const [sauvegarde, setSauvegarde] = useState(false)
@@ -799,7 +800,7 @@ function ReglageCc(props: { campagne: string; cc: string; onEnregistre: () => vo
     try {
       await enregistrerCc(props.campagne, normaliser(valeur))
       const n = decouperAdresses(valeur).length
-      toast.success(n === 0 ? "Plus personne en copie des mails" : `${n} adresse(s) en copie de tous les mails de la campagne`)
+      toast.success(n === 0 ? "Plus personne en copie des mails de la campagne" : `${n} adresse(s) en copie des mails de tous les contacts`)
       setValeur(normaliser(valeur))
       props.onEnregistre()
     } catch (e) {
@@ -818,11 +819,13 @@ function ReglageCc(props: { campagne: string; cc: string; onEnregistre: () => vo
       }}
     >
       <CopyIcon className="size-4" />
-      <span>En copie de tous les mails</span>
+      <span title="Ces adresses sont mises en copie de chaque brouillon (Mail1 et relances), pour tous les contacts de la campagne. Pour une copie propre à un contact, utilise sa colonne « CC de ce contact » dans l'onglet Contacts.">
+        Copie (CC) sur les mails de <strong className="font-medium text-foreground">tous les contacts</strong>
+      </span>
       <Input
         value={valeur}
         onChange={(e) => setValeur(e.target.value)}
-        placeholder="personne (adresses séparées par ;)"
+        placeholder="aucune (adresses séparées par ;)"
         aria-invalid={invalide || undefined}
         className="h-7 w-80 max-w-full px-2"
         aria-label="Adresses en copie de tous les mails de la campagne"

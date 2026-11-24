@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { ImportContacts } from "@/ImportContacts"
+import { NouveauContact } from "@/NouveauContact"
 import { enregistrerContacts, type LigneContact } from "@/lib/api"
 import { ccInvalide, estColonneObjet, estEmailValide, objetDeCampagne } from "@/lib/apercu"
 import { normaliserCivilite } from "@/lib/import"
@@ -26,7 +27,7 @@ const libelleColonne: Record<string, string> = {
   Entreprise: "Entreprise",
   Telephone: "Téléphone",
   Email: "E-mail",
-  CC: "En copie (CC)",
+  CC: "CC de ce contact",
   Sujet1: "Objet Mail1",
   Sujet2: "Objet Mail2",
   Sujet3: "Objet Mail3",
@@ -52,6 +53,8 @@ export function EditeurContacts(props: {
   /** Objets communs mémorisés pour la campagne (parametres.json), donnés aux contacts ajoutés */
   objets?: (string | null)[] | null
   campagneDemarree: boolean
+  /** Adresses en copie de toute la campagne (rappelées dans le formulaire d'ajout) */
+  ccCampagne: string
   /** Étapes déjà envoyées, par adresse e-mail (en minuscules), d'après le suivi Outlook */
   envois: Record<string, number[]>
   onEnregistre: () => void
@@ -67,6 +70,7 @@ export function EditeurContacts(props: {
   const [sauvegarde, setSauvegarde] = useState(false)
   const [aSupprimer, setASupprimer] = useState<number | null>(null)
   const [importOuvert, setImportOuvert] = useState(false)
+  const [ajoutOuvert, setAjoutOuvert] = useState(false)
   // Objets communs (les plus fréquents parmi les contacts enregistrés) : donnés aux contacts ajoutés ici. Ils se
   // modifient dans l'onglet Textes des mails.
   const objets = useMemo(() => [1, 2, 3, 4].map((n) => objetDeCampagne(props.objets, props.contacts, n)), [props.objets, props.contacts])
@@ -185,25 +189,39 @@ export function EditeurContacts(props: {
     }, 0)
   }
 
-  async function enregistrer(forcer = false) {
+  async function enregistrer(forcer = false, liste = lignes): Promise<boolean> {
     if (risques.size > 0 && !forcer) {
       setConfirmerRisques(true)
-      return
+      return false
     }
     setConfirmerRisques(false)
     setSauvegarde(true)
     try {
-      const r = await enregistrerContacts(props.campagne, colonnes, lignes)
-      const propres = lignes.filter((l) => Object.values(l).some((v) => v.trim()))
+      const r = await enregistrerContacts(props.campagne, colonnes, liste)
+      const propres = liste.filter((l) => Object.values(l).some((v) => v.trim()))
       setLignes(propres)
       setReference(JSON.stringify(propres))
       toast.success(`${r.nb} contact(s) enregistré(s)`)
       props.onEnregistre()
+      return true
     } catch (e) {
       toast.error((e as Error).message)
+      return false
     } finally {
       setSauvegarde(false)
     }
+  }
+
+  /**
+   * Formulaire « Ajouter un contact » : enregistré tout de suite si le tableau n'a pas d'autre modification en
+   * cours ; sinon ajouté au tableau, enregistré avec le reste.
+   */
+  async function ajouterUnContact(contact: LigneContact) {
+    const nouveau = { ...ligneAvecObjets(), ...contact }
+    if (!modifie) return enregistrer(true, [...lignes, nouveau])
+    setLignes((ls) => [...ls, nouveau])
+    toast.success("Contact ajouté en fin de liste. Enregistre pour le garder.")
+    return true
   }
 
   return (
@@ -215,7 +233,7 @@ export function EditeurContacts(props: {
         </p>
         <div className="flex-1" />
         <Button onClick={() => setImportOuvert(true)}><ClipboardPasteIcon /> Ajouter en masse</Button>
-        <Button variant="outline" onClick={() => setLignes((ls) => [...ls, ligneAvecObjets()])}>
+        <Button variant="outline" onClick={() => setAjoutOuvert(true)}>
           <PlusIcon /> Ajouter un contact
         </Button>
       </div>
@@ -225,7 +243,7 @@ export function EditeurContacts(props: {
           <TriangleAlertIcon className="size-4" />
           {nbErreurs > 0 && `${nbErreurs} adresse(s) e-mail invalide(s) ou manquante(s), en rouge. `}
           {doublons.size > 0 && `${doublons.size} adresse(s) en double. `}
-          {nbCcInvalides > 0 && `${nbCcInvalides} case(s) « En copie » avec une adresse invalide (sépare plusieurs adresses par ;).`}
+          {nbCcInvalides > 0 && `${nbCcInvalides} case(s) « CC de ce contact » avec une adresse invalide (sépare plusieurs adresses par ;).`}
         </p>
       )}
 
@@ -387,6 +405,17 @@ export function EditeurContacts(props: {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <NouveauContact
+        ouvert={ajoutOuvert}
+        onFermer={() => setAjoutOuvert(false)}
+        colonnes={colonnes}
+        ligneDeDepart={ligneAvecObjets}
+        emailsExistants={emailsExistants}
+        ccCampagne={props.ccCampagne}
+        autresModifs={modifie}
+        onAjouter={ajouterUnContact}
+      />
 
       <ImportContacts
         ouvert={importOuvert}

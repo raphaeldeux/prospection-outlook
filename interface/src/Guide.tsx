@@ -268,6 +268,10 @@ export function Guide() {
               <li>une simple <strong>liste d'adresses</strong>.</li>
             </ul>
             <p>
+              <strong>Ajouter un contact</strong> (un seul) : un petit formulaire s'ouvre ; remplis au moins l'e-mail, puis
+              clique sur <strong>Enregistrer</strong>. Le contact est ajouté en fin de liste avec les objets communs.
+            </p>
+            <p>
               Prénom, nom et entreprise manquants sont déduits des adresses de type <Code>prenom.nom@entreprise.fr</Code>. Les
               adresses déjà présentes et invalides sont ignorées.
             </p>
@@ -288,8 +292,11 @@ export function Guide() {
                   <tr><td className="text-foreground">Téléphone</td><td>Facultatif, pour mémoire</td></tr>
                   <tr><td className="text-foreground">E-mail</td><td>Obligatoire ; en rouge si invalide ou en double</td></tr>
                   <tr>
-                    <td className="text-foreground">En copie (CC)</td>
-                    <td>Facultatif : adresses mises en copie des mails de ce contact (plusieurs adresses séparées par ;)</td>
+                    <td className="text-foreground">CC de ce contact</td>
+                    <td>
+                      Facultatif : adresses mises en copie des mails de ce contact seulement (plusieurs adresses séparées par ;).
+                      Elles s'ajoutent à la copie de toute la campagne, réglée sous le nom de la campagne.
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -429,10 +436,10 @@ export function Guide() {
               les brouillons ».
             </p>
             <p>
-              Juste en dessous, « En copie de tous les mails » : les adresses indiquées (un collègue, un manager…, séparées par
-              ;) sont mises en <strong>copie (CC)</strong> de tous les brouillons de la campagne, Mail1 et relances. Pour une
-              copie propre à un contact, remplis plutôt sa colonne « En copie (CC) » dans l'onglet Contacts ; les deux
-              s'additionnent. Le réglage s'applique aux brouillons créés ensuite, pas à ceux qui existent déjà.
+              Juste en dessous, « Copie (CC) sur les mails de tous les contacts » : les adresses indiquées (un collègue, un
+              manager…, séparées par ;) sont mises en <strong>copie (CC)</strong> de tous les brouillons de la campagne, Mail1
+              et relances. Pour une copie propre à un contact, remplis plutôt sa colonne « CC de ce contact » dans l'onglet
+              Contacts ; les deux s'additionnent. Le réglage s'applique aux brouillons créés ensuite, pas à ceux qui existent déjà.
             </p>
           </Section>
 
