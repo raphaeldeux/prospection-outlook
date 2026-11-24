@@ -4,12 +4,12 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { etapeSuivante, ouvrirBrouillonsOutlook, type Campagne, type Code, type Suivi } from "@/lib/api"
 import { lireNomCampagne } from "@/lib/campagne"
+import { pl } from "@/lib/texte"
 import { nomAffiche } from "@/lib/statut"
 import { ActionsContact } from "@/ActionsContact"
 import { DerniereActualisation } from "@/DerniereActualisation"
 
 /** "1 brouillon" / "3 brouillons" */
-const pl = (n: number, singulier: string, pluriel: string) => `${n} ${n > 1 ? pluriel : singulier}`
 
 const versDate = (d?: string) => {
   const m = d?.match(/^(\d{2})\/(\d{2})\/(\d{4})/)

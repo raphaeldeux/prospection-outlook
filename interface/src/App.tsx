@@ -70,6 +70,7 @@ import {
 } from "@/lib/api"
 import { ccInvalide, decouperAdresses } from "@/lib/apercu"
 import { cn } from "@/lib/utils"
+import { accord, pl } from "@/lib/texte"
 import { StatutBadge, statuts } from "@/StatutBadge"
 
 /** Pastille verte « À jour » de la barre de gauche : rien à préparer ni à envoyer */
@@ -413,7 +414,7 @@ export default function App() {
                 </span>
                 {aTraiter > 0 ? (
                   <span
-                    title={`${aTraiter} contact(s) à traiter : mail à préparer ou brouillon à envoyer`}
+                    title={`${pl(aTraiter, "contact", "contacts")} à traiter : mail à préparer ou brouillon à envoyer`}
                     className="rounded-full bg-amber-100 px-1.5 text-xs text-amber-900 dark:bg-amber-950 dark:text-amber-200"
                   >
                     {aTraiter}
@@ -511,7 +512,7 @@ export default function App() {
             <AlertDialogTitle>Créer les brouillons {aConfirmer && nomsEtapes[aConfirmer.etape]} ?</AlertDialogTitle>
             <AlertDialogDescription>
               {aConfirmer?.nb
-                ? `${aConfirmer.nb} contact(s) semblent concernés. `
+                ? `${pl(aConfirmer.nb, "contact semble concerné", "contacts semblent concernés")}. `
                 : `${aConfirmer?.raison || "Aucun contact ne semble concerné pour l'instant."} L'outil vérifiera à nouveau dans Outlook. `}
               Les brouillons seront créés dans Outlook. Rien n'est envoyé : tu relis et tu envoies toi-même.
             </AlertDialogDescription>
@@ -661,7 +662,7 @@ function VueCampagne(props: {
     const concernes = contacts.filter((c) => c.NbEtapes >= n && !c[`Mail${n}` as "Mail1"])
     const detail = [
       prevus === 0 && `aucun contact n'a d'objet pour Mail${n} (onglet Textes des mails)`,
-      enAttente > 0 && `${enAttente} attendent le délai de ${campagne.DelaiRelance} jour(s)`,
+      enAttente > 0 && `${enAttente} ${accord(enAttente, "attend", "attendent")} le délai de ${pl(campagne.DelaiRelance, "jour", "jours")}`,
       brouillons > 0 && `${brouillons} ont déjà un brouillon à envoyer`,
       n > 1 && concernes.filter((c) => etapeSuivante(c) < n && c.Code !== "repondu").length > 0 &&
         `${concernes.filter((c) => etapeSuivante(c) < n && c.Code !== "repondu").length} n'ont pas encore reçu Mail${n - 1}`,
@@ -693,7 +694,7 @@ function VueCampagne(props: {
               <PencilIcon />
             </Button>
           </h1>
-          <p className="text-sm text-muted-foreground">{contacts.length} contact(s)</p>
+          <p className="text-sm text-muted-foreground">{pl(contacts.length, "contact", "contacts")}</p>
           <ReglageDelai key={campagne.Nom} campagne={campagne.Nom} delai={campagne.DelaiRelance} onEnregistre={props.onActualiser} />
           <ReglageCc key={`cc-${campagne.Nom}`} campagne={campagne.Nom} cc={campagne.Cc ?? ""} onEnregistre={props.onActualiser} />
         </div>
@@ -769,8 +770,8 @@ function VueCampagne(props: {
               <CardHeader>
                 <CardTitle className="text-sm">{nomsEtapes[e.n]}</CardTitle>
                 <CardDescription>
-                  {e.envoyes}/{e.prevus} envoyé(s)
-                  {e.brouillons > 0 && ` · ${e.brouillons} brouillon(s) à envoyer`}
+                  {e.envoyes}/{e.prevus} {accord(e.envoyes, "envoyé", "envoyés")}
+                  {e.brouillons > 0 && ` · ${pl(e.brouillons, "brouillon", "brouillons")} à envoyer`}
                 </CardDescription>
               </CardHeader>
               {/* flex-1 + mt-auto : les boutons restent alignés en bas des 4 cartes, quelle que soit la longueur du message */}
@@ -780,8 +781,8 @@ function VueCampagne(props: {
                     <TriangleAlertIcon className="mt-0.5 size-3.5 shrink-0" />
                     <span>
                       {e.aCreer > 0
-                        ? `${e.aCreer} contact(s) attendent cette relance`
-                        : `${e.enAttente} contact(s) l'attendront bientôt`}{" "}
+                        ? `${pl(e.aCreer, "contact attend", "contacts attendent")} cette relance`
+                        : `${pl(e.enAttente, "contact l'attendra", "contacts l'attendront")} bientôt`}{" "}
                       : rédige son objet et son texte.{" "}
                       <button className="underline underline-offset-2 hover:text-foreground" onClick={() => { props.setEtapeTexte(e.n); setOnglet("textes") }}>
                         Rédiger Mail{e.n}
@@ -802,7 +803,7 @@ function VueCampagne(props: {
                   </p>
                 ) : (
                   <p className="text-xs text-muted-foreground">
-                    {e.aCreer > 0 ? `${e.aCreer} contact(s) prêt(s)` : "Aucun contact prêt pour l'instant"}
+                    {e.aCreer > 0 ? pl(e.aCreer, "contact prêt", "contacts prêts") : "Aucun contact prêt pour l'instant"}
                     {e.enAttente > 0 && ` · ${e.enAttente} en attente du délai de ${campagne.DelaiRelance} j`}
                   </p>
                 )}
@@ -951,7 +952,7 @@ function ReglageDelai(props: { campagne: string; delai: number; onEnregistre: ()
     setSauvegarde(true)
     try {
       await enregistrerDelai(props.campagne, n)
-      toast.success(n === 0 ? "Relances possibles sans délai" : `Relance possible ${n} jour(s) après le mail précédent`)
+      toast.success(n === 0 ? "Relances possibles sans délai" : `Relance possible ${pl(n, "jour", "jours")} après le mail précédent`)
       props.onEnregistre()
     } catch (e) {
       toast.error((e as Error).message)
@@ -980,7 +981,7 @@ function ReglageDelai(props: { campagne: string; delai: number; onEnregistre: ()
         className="h-7 w-16 px-2 text-center"
         aria-label="Délai avant relance, en jours"
       />
-      <span>jour(s) après le mail précédent</span>
+      <span>{accord(Number(valeur) || 0, "jour", "jours")} après le mail précédent</span>
       {modifie && (
         <Button type="submit" size="sm" disabled={sauvegarde}>
           {sauvegarde ? <Loader2Icon className="animate-spin" /> : <SaveIcon />} Enregistrer
@@ -1004,7 +1005,7 @@ function ReglageCc(props: { campagne: string; cc: string; onEnregistre: () => vo
     try {
       await enregistrerCc(props.campagne, normaliser(valeur))
       const n = decouperAdresses(valeur).length
-      toast.success(n === 0 ? "Plus personne en copie des mails" : `${n} adresse(s) en copie de tous les mails de la campagne`)
+      toast.success(n === 0 ? "Plus personne en copie des mails" : `${pl(n, "adresse", "adresses")} en copie de tous les mails de la campagne`)
       setValeur(normaliser(valeur))
       props.onEnregistre()
     } catch (e) {

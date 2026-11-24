@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea"
 import type { LigneContact } from "@/lib/api"
 import { analyser, construire, libellesChamps, type ChampImport } from "@/lib/import"
 import { cn } from "@/lib/utils"
+import { accord, pl } from "@/lib/texte"
 
 const champsAffiches: ChampImport[] = ["Civilite", "Prenom", "Nom", "Entreprise", "Telephone", "Email"]
 const formats: Record<string, string> = {
@@ -140,9 +141,9 @@ export function ImportContacts(props: {
               </table>
             </div>
             <p className="text-xs text-muted-foreground">
-              <strong className="text-foreground">{nouveaux.length} contact(s) à ajouter</strong>
-              {nbDoublons > 0 && ` · ${nbDoublons} déjà présent(s), ignoré(s)`}
-              {nbInvalides > 0 && ` · ${nbInvalides} sans adresse valide, ignoré(s)`}
+              <strong className="text-foreground">{pl(nouveaux.length, "contact à ajouter", "contacts à ajouter")}</strong>
+              {nbDoublons > 0 && ` · ${pl(nbDoublons, "déjà présent, ignoré", "déjà présents, ignorés")}`}
+              {nbInvalides > 0 && ` · ${nbInvalides} sans adresse valide, ${accord(nbInvalides, "ignoré", "ignorés")}`}
               {resultat.length > 200 && " · aperçu limité aux 200 premières lignes"}. Les objets des mails définis plus haut leur
               sont appliqués. Corrige un champ mal reconnu avec les listes en tête de colonne.
             </p>
@@ -158,7 +159,7 @@ export function ImportContacts(props: {
               fermer()
             }}
           >
-            Ajouter {nouveaux.length || ""} contact(s)
+            Ajouter {nouveaux.length ? pl(nouveaux.length, "contact", "contacts") : "les contacts"}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>

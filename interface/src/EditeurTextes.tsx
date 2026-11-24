@@ -29,6 +29,7 @@ import { enregistrerObjet, enregistrerTexte, type LigneContact, type TextePerson
 import { objetDeCampagne, resoudreVariables, texteVersHtml } from "@/lib/apercu"
 import { nomAffiche } from "@/lib/statut"
 import { cn } from "@/lib/utils"
+import { pl } from "@/lib/texte"
 
 const libelles = ["", "Mail1", "Mail2 · relance 1", "Mail3 · relance 2", "Mail4 · relance 3"]
 
@@ -202,7 +203,7 @@ export function EditeurTextes(props: {
           await enregistrerObjet(campagne, [cible], etape, valeur)
         } else {
           const r = await enregistrerObjet(campagne, recoiventCommun, etape, valeur, true)
-          if (r.nb > 0) message += ` : objet appliqué à ${r.nb} contact(s)`
+          if (r.nb > 0) message += ` : objet appliqué à ${pl(r.nb, "contact", "contacts")}`
           if (nbDejaRecu > 0) message += ` (${nbDejaRecu} ayant déjà reçu ce mail gardent leur objet)`
         }
         setObjetsEnregistres((o) => ({ ...o, [k]: valeur }))
@@ -314,7 +315,7 @@ export function EditeurTextes(props: {
             <Button key={n} size="sm" variant={etape === n ? "secondary" : "ghost"} onClick={() => setEtape(n)}>
               {libelles[n]}
               {nbPerso > 0 && (
-                <span className="text-xs text-muted-foreground" title={`${nbPerso} contact(s) avec leur propre texte ou objet`}>
+                <span className="text-xs text-muted-foreground" title={nbPerso > 1 ? `${nbPerso} contacts avec leur propre texte ou objet` : `${nbPerso} contact avec son propre texte ou objet`}>
                   · {nbPerso} perso
                 </span>
               )}
@@ -407,8 +408,9 @@ export function EditeurTextes(props: {
                     {!cible && modifieObjet(k) && nbDejaRecu > 0 && (
                       <p className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300">
                         <TriangleAlertIcon className="mt-0.5 size-3.5 shrink-0" />
-                        {nbDejaRecu} contact(s) ont déjà reçu {libelles[etape]} : ils gardent leur objet actuel, pour que le suivi
-                        retrouve leur mail.
+                        {nbDejaRecu > 1
+                          ? `${nbDejaRecu} contacts ont déjà reçu ${libelles[etape]} : ils gardent leur objet actuel, pour que le suivi retrouve leur mail.`
+                          : `1 contact a déjà reçu ${libelles[etape]} : il garde son objet actuel, pour que le suivi retrouve son mail.`}
                       </p>
                     )}
                   </>

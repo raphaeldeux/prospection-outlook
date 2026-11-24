@@ -19,6 +19,7 @@ import { enregistrerContacts, type LigneContact } from "@/lib/api"
 import { estColonneObjet, estEmailValide, objetDeCampagne } from "@/lib/apercu"
 import { normaliserCivilite } from "@/lib/import"
 import { cn } from "@/lib/utils"
+import { accord, pl } from "@/lib/texte"
 import type { ContactGlisse } from "@/App"
 import { nomAffiche } from "@/lib/statut"
 
@@ -139,7 +140,7 @@ export function EditeurContacts(props: {
 
   function ajouterEnMasse(nouvelles: LigneContact[]) {
     setLignes((ls) => [...ls, ...nouvelles])
-    toast.success(`${nouvelles.length} contact(s) ajouté(s) en fin de liste. Enregistre pour les garder.`)
+    toast.success(`${pl(nouvelles.length, "contact ajouté", "contacts ajoutés")} en fin de liste. Enregistre pour ${accord(nouvelles.length, "le", "les")} garder.`)
   }
 
   const emailsExistants = useMemo(
@@ -174,7 +175,7 @@ export function EditeurContacts(props: {
       })
       return r
     })
-    toast.success(`${blocs.length} ligne(s) collée(s) à partir de la ligne ${i + 1}`)
+    toast.success(`${pl(blocs.length, "ligne collée", "lignes collées")} à partir de la ligne ${i + 1}`)
   }
 
   /** Entrée : passe à la même case de la ligne suivante (en créant une ligne au besoin) */
@@ -202,7 +203,7 @@ export function EditeurContacts(props: {
       const propres = liste.filter((l) => Object.values(l).some((v) => v.trim()))
       setLignes(propres)
       setReference(JSON.stringify(propres))
-      toast.success(`${r.nb} contact(s) enregistré(s)`)
+      toast.success(`${pl(r.nb, "contact enregistré", "contacts enregistrés")}`)
       props.onEnregistre()
       return true
     } catch (e) {
@@ -242,8 +243,8 @@ export function EditeurContacts(props: {
       {(nbErreurs > 0 || doublons.size > 0) && (
         <p className="flex items-center gap-1.5 text-sm text-amber-700 dark:text-amber-300">
           <TriangleAlertIcon className="size-4" />
-          {nbErreurs > 0 && `${nbErreurs} adresse(s) e-mail invalide(s) ou manquante(s), en rouge. `}
-          {doublons.size > 0 && `${doublons.size} adresse(s) en double. `}
+          {nbErreurs > 0 && `${pl(nbErreurs, "adresse e-mail invalide ou manquante", "adresses e-mail invalides ou manquantes")}, en rouge. `}
+          {doublons.size > 0 && `${pl(doublons.size, "adresse en double", "adresses en double")}. `}
         </p>
       )}
 
@@ -259,7 +260,7 @@ export function EditeurContacts(props: {
           <ul className="mt-1 list-disc pl-5">
             {[...risques.entries()].map(([i, r]) => (
               <li key={i}>
-                {lignes[i].Nom || lignes[i].Email} : Mail{r.etapes.join(", Mail")} déjà envoyé(s), modifié :{" "}
+                {lignes[i].Nom || lignes[i].Email} : Mail{r.etapes.join(", Mail")} {accord(r.etapes.length, "déjà envoyé", "déjà envoyés")}, modifié :{" "}
                 {[...r.cols].map((c) => libelleColonne[c] ?? c).join(", ")}
               </li>
             ))}
@@ -413,7 +414,7 @@ export function EditeurContacts(props: {
           <AlertDialogHeader>
             <AlertDialogTitle>Enregistrer quand même ?</AlertDialogTitle>
             <AlertDialogDescription>
-              {risques.size} contact(s) déjà contacté(s) ont une adresse ou un objet modifié. Les mails déjà envoyés ne seront
+              {pl(risques.size, "contact déjà contacté a", "contacts déjà contactés ont")} une adresse ou un objet modifié. Les mails déjà envoyés ne seront
               plus reconnus par le suivi, et une nouvelle création de brouillons pourrait leur renvoyer le même mail.
             </AlertDialogDescription>
           </AlertDialogHeader>
