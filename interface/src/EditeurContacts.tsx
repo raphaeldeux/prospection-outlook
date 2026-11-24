@@ -250,7 +250,7 @@ export function EditeurContacts(props: {
           </p>
           <p className="mt-1">
             Le suivi retrouve un mail grâce à l'adresse et à l'objet. En les modifiant (cases orange), les mails déjà envoyés ne
-            seront plus reconnus : le contact repassera en « Mail1 à créer » et pourrait recevoir le même mail deux fois.
+            seront plus reconnus : le contact repassera en « Brouillon Mail1 à créer » et pourrait recevoir le même mail deux fois.
           </p>
           <ul className="mt-1 list-disc pl-5">
             {[...risques.entries()].map(([i, r]) => (

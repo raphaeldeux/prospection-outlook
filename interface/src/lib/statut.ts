@@ -27,7 +27,7 @@ export function detailStatut(c: Contact): string {
     case "brouillon":
       return `Brouillon Mail${n} prêt dans Outlook : relis-le et envoie-le`
     case "afaire":
-      return "Mail1 à préparer"
+      return "Pas encore dans Outlook : « Créer les brouillons »"
     case "relance":
       return `Mail${n - 1} envoyé ${depuis(c.JoursDepuisEnvoi)} : Mail${n} possible`
     case "attente":

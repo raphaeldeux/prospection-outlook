@@ -437,7 +437,7 @@ export function Guide() {
           <Section id="statuts" titre="Comprendre les statuts">
             <div className="space-y-2">
               {([
-                ["afaire", "Aucun mail envoyé pour l'instant : crée le Mail1."],
+                ["afaire", "Le brouillon Mail1 n'est pas encore dans Outlook (même si son texte est prêt) : clique sur « Créer les brouillons » de l'étape Mail1."],
                 ["brouillon", "Un brouillon attend dans Outlook : relis-le et envoie-le."],
                 ["attente", "Le dernier mail est trop récent : la date de relance possible est indiquée."],
                 ["relance", "Le délai est écoulé : la relance suivante peut être créée."],
