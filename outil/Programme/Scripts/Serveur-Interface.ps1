@@ -16,6 +16,8 @@
 #   PUT  /api/issue     -> issue d'un contact (RDV, pas interesse...) dans issues.json
 #   POST /api/outlook-reponse -> ouvre dans Outlook le dernier mail recu d'un contact
 #   POST /api/campagnes -> cree une campagne a partir de Programme\Modele campagne
+#   POST /api/campagnes/renommer -> renomme le dossier d'une campagne (mois, annee, titre)
+#   POST /api/contacts/deplacer  -> deplace des contacts d'une campagne a une autre
 #
 # Securite : ecoute uniquement sur localhost, et chaque appel /api doit porter l'en-tete
 # X-Prospection (un site web externe ne peut pas l'ajouter sans autorisation CORS, qu'on ne donne pas).
@@ -559,6 +561,108 @@ try {
                     [IO.File]::WriteAllText($csv, "$entete`r`n", (New-Object System.Text.UTF8Encoding $true))
                     Write-Host "$(Get-Date -Format HH:mm:ss) Nouvelle campagne creee : $nom"
                     Send-Json $ctx 200 @{ ok = $true; nom = $nom }
+                    continue
+                }
+
+                if ($chemin -eq "/api/campagnes/renommer" -and $req.HttpMethod -eq "POST") {
+                    # Renomme le dossier d'une campagne ("AAAA-MM Titre"). Le suivi retrouve les mails par adresse et
+                    # par objet, pas par nom de dossier : rien d'autre a modifier.
+                    $corps = Read-Corps $req
+                    $ancien = [string]$corps.campagne
+                    $dossier = Get-DossierCampagne $ancien
+                    $nom = ([string]$corps.nom).Trim()
+                    if (-not $dossier) { Send-Json $ctx 400 @{ erreur = "Campagne invalide." }; continue }
+                    if (-not $nom -or $nom.StartsWith("_") -or $nom -match '[\\/:*?"<>|]' -or $nom -like '.*') {
+                        Send-Json $ctx 400 @{ erreur = "Nom invalide (caracteres interdits : \ / : * ? `" < > |)." }; continue
+                    }
+                    if ($nom -ceq $ancien) { Send-Json $ctx 200 @{ ok = $true; nom = $nom }; continue }
+                    $memeNom = $nom -eq $ancien   # seules les majuscules changent : Windows voit le meme dossier
+                    if (-not $memeNom -and (Test-Path (Join-Path $campagnes $nom))) { Send-Json $ctx 409 @{ erreur = "Une campagne porte deja ce nom." }; continue }
+                    try {
+                        if ($memeNom) {
+                            $temp = "_renommage $([guid]::NewGuid().ToString('N').Substring(0, 8))"
+                            Rename-Item -LiteralPath $dossier -NewName $temp
+                            Rename-Item -LiteralPath (Join-Path $campagnes $temp) -NewName $nom
+                        } else {
+                            Rename-Item -LiteralPath $dossier -NewName $nom
+                        }
+                    } catch {
+                        Send-Json $ctx 409 @{ erreur = "Impossible de renommer la campagne : un de ses fichiers ou son dossier est ouvert (Excel, Explorateur...). Ferme-le puis reessaie." }
+                        continue
+                    }
+                    Write-Host "$(Get-Date -Format HH:mm:ss) Campagne renommee : $ancien -> $nom"
+                    Send-Json $ctx 200 @{ ok = $true; nom = $nom }
+                    continue
+                }
+
+                if ($chemin -eq "/api/contacts/deplacer" -and $req.HttpMethod -eq "POST") {
+                    # Deplace des contacts (par adresse) d'une campagne a une autre : ajoutes en fin de liste de la cible
+                    # avec ses objets communs, retires de la source. Leurs textes personnalises suivent ; leur issue
+                    # (RDV, pas interesse...) reste propre a l'ancienne campagne et y est retiree.
+                    # La cible est ecrite AVANT la source : en cas d'echec, un contact peut etre en double, jamais perdu.
+                    $corps = Read-Corps $req
+                    $source = Get-DossierCampagne $corps.source
+                    $cible = Get-DossierCampagne $corps.cible
+                    $emails = @(@($corps.emails) | ForEach-Object { ([string]$_).Trim().ToLower() } | Where-Object { $_ } | Select-Object -Unique)
+                    if (-not $source -or -not $cible -or $source -eq $cible -or $emails.Count -eq 0) { Send-Json $ctx 400 @{ erreur = "Campagnes ou contacts invalides." }; continue }
+
+                    $lireColonnes = { param($csv)
+                        $entete = @((Get-Content $csv -Encoding UTF8 -TotalCount 1) -split ';' | ForEach-Object { $_.Trim('"') } | Where-Object { $_ })
+                        @($entete) + @($colonnesStandard | Where-Object { $_ -notin $entete })
+                    }
+                    $ecrireCsv = { param($csv, $colonnes, $contacts)
+                        $lignes = New-Object System.Collections.Generic.List[string]
+                        $lignes.Add(($colonnes | ForEach-Object { ConvertTo-ChampCsv $_ }) -join ';')
+                        foreach ($c in $contacts) { $lignes.Add((($colonnes | ForEach-Object { ConvertTo-ChampCsv ([string]$c.$_) }) -join ';')) }
+                        Write-FichierCampagne -Chemin $csv -Contenu (($lignes -join "`r`n") + "`r`n")
+                    }
+                    $csvS = Join-Path $source "contacts.csv"; $csvC = Join-Path $cible "contacts.csv"
+                    $contactsS = @(Import-Csv -Path $csvS -Delimiter ';' -Encoding UTF8)
+                    $contactsC = @(Import-Csv -Path $csvC -Delimiter ';' -Encoding UTF8)
+                    $aDeplacer = @($contactsS | Where-Object { ([string]$_.Email).Trim().ToLower() -in $emails })
+                    if ($aDeplacer.Count -eq 0) { Send-Json $ctx 404 @{ erreur = "Contact introuvable dans contacts.csv (adresse modifiee ou non enregistree ?)." }; continue }
+                    $dejaLa = @($contactsC | ForEach-Object { ([string]$_.Email).Trim().ToLower() } | Where-Object { $_ -in $emails })
+                    if ($dejaLa.Count) { Send-Json $ctx 409 @{ erreur = "Deja dans la campagne $($corps.cible) : $($dejaLa -join ', ')" }; continue }
+
+                    $colonnesC = & $lireColonnes $csvC
+                    $nouveaux = foreach ($c in $aDeplacer) {
+                        $l = [ordered]@{}
+                        foreach ($col in $colonnesC) { $l[$col] = if ($col -match '^Sujet[1-4]$') { "" } else { ([string]$c.$col).Trim() } }
+                        [pscustomobject]$l
+                    }
+                    try {
+                        & $ecrireCsv $csvC $colonnesC (@($contactsC) + @($nouveaux))
+                    } catch { Send-Json $ctx 409 @{ erreur = "Campagne $($corps.cible) : $($_.Exception.Message)" }; continue }
+                    try {
+                        & $ecrireCsv $csvS (& $lireColonnes $csvS) @($contactsS | Where-Object { ([string]$_.Email).Trim().ToLower() -notin $emails })
+                    } catch {
+                        Send-Json $ctx 409 @{ erreur = "Contact(s) ajoute(s) a $($corps.cible) mais pas retire(s) de $($corps.source) : $($_.Exception.Message)" }; continue
+                    }
+                    [void](Complete-ObjetsVides $cible)   # objets communs de la campagne cible
+
+                    # textes personnalises : suivent le contact
+                    $persoS = Read-TextesPersonnalises $source
+                    $persoC = Read-TextesPersonnalises $cible
+                    $nbPerso = 0
+                    foreach ($e in $emails) { if ($persoS.Contains($e)) { $persoC[$e] = $persoS[$e]; $persoS.Remove($e); $nbPerso++ } }
+                    if ($nbPerso) {
+                        try {
+                            New-Item -ItemType Directory -Force (Join-Path $cible "Textes") | Out-Null
+                            Write-FichierCampagne -Chemin (Join-Path $cible "Textes\personnalises.json") -Contenu ([pscustomobject]$persoC | ConvertTo-Json -Depth 4)
+                            Write-FichierCampagne -Chemin (Join-Path $source "Textes\personnalises.json") -Contenu ([pscustomobject]$persoS | ConvertTo-Json -Depth 4)
+                        } catch { Write-Host "Textes personnalises non deplaces : $($_.Exception.Message)" -ForegroundColor Yellow }
+                    }
+                    # issue dans l'ancienne campagne : retiree
+                    $fi = Join-Path $source "issues.json"
+                    if (Test-Path $fi) {
+                        try {
+                            $issues = [ordered]@{}
+                            (Get-Content $fi -Raw -Encoding UTF8 | ConvertFrom-Json).PSObject.Properties | ForEach-Object { if ($_.Name.Trim().ToLower() -notin $emails) { $issues[$_.Name] = $_.Value } }
+                            Write-FichierCampagne -Chemin $fi -Contenu ([pscustomobject]$issues | ConvertTo-Json -Depth 4)
+                        } catch {}
+                    }
+                    Write-Host "$(Get-Date -Format HH:mm:ss) $($aDeplacer.Count) contact(s) deplace(s) : $($corps.source) -> $($corps.cible)"
+                    Send-Json $ctx 200 @{ ok = $true; nb = $aDeplacer.Count }
                     continue
                 }
 

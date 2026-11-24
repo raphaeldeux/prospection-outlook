@@ -224,6 +224,10 @@ export function Guide() {
               Tout se fait depuis l'interface. Une campagne est un dossier de <Code>Campagnes\</Code> (bouton « Dossier ») : inutile
               d'ouvrir les fichiers à la main.
             </p>
+            <p>
+              Pour <strong>renommer</strong> une campagne (titre, mois ou année), clique sur le crayon à côté de son titre. Les
+              contacts, les textes et le suivi des mails déjà envoyés sont conservés.
+            </p>
           </Section>
 
           <Section id="objets" titre="Les objets des mails">
@@ -270,6 +274,12 @@ export function Guide() {
             <p>
               <strong>Ajouter un contact</strong> (un seul) : un petit formulaire s'ouvre ; remplis au moins l'e-mail, puis
               clique sur <strong>Enregistrer</strong>. Le contact est ajouté en fin de liste avec les objets communs.
+            </p>
+            <p>
+              <strong>Changer un contact de campagne</strong> : glisse-le (sa ligne dans le suivi, ou sa poignée à gauche dans
+              l'onglet Contacts) sur une autre campagne de la barre de gauche, puis confirme. Il est ajouté en fin de liste avec
+              les objets de cette campagne et son texte personnalisé le suit. S'il a déjà reçu des mails, ceux-ci ne sont plus
+              suivis et il recevra le Mail1 de sa nouvelle campagne.
             </p>
             <p>
               Prénom, nom et entreprise manquants sont déduits des adresses de type <Code>prenom.nom@entreprise.fr</Code>. Les

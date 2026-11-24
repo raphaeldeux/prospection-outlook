@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { ClipboardPasteIcon, Loader2Icon, PlusIcon, SaveIcon, Trash2Icon, TriangleAlertIcon, Undo2Icon } from "lucide-react"
+import { ClipboardPasteIcon, GripVerticalIcon, Loader2Icon, PlusIcon, SaveIcon, Trash2Icon, TriangleAlertIcon, Undo2Icon } from "lucide-react"
 import { toast } from "sonner"
 import {
   AlertDialog,
@@ -19,6 +19,8 @@ import { enregistrerContacts, type LigneContact } from "@/lib/api"
 import { estColonneObjet, estEmailValide, objetDeCampagne } from "@/lib/apercu"
 import { normaliserCivilite } from "@/lib/import"
 import { cn } from "@/lib/utils"
+import type { ContactGlisse } from "@/App"
+import { nomAffiche } from "@/lib/statut"
 
 const libelleColonne: Record<string, string> = {
   Civilite: "Civilité",
@@ -55,6 +57,8 @@ export function EditeurContacts(props: {
   envois: Record<string, number[]>
   onEnregistre: () => void
   onModifie: (modifie: boolean) => void
+  /** Glisser un contact (poignée à gauche) sur une campagne de la barre de gauche pour l'y déplacer */
+  onGlisser: (g: ContactGlisse | null) => void
 }) {
   const { colonnes, campagneDemarree } = props
   // Les objets (Sujet1..4) ne sont pas affichés dans le tableau : objet commun dans le bloc ci-dessous, objet
@@ -226,7 +230,7 @@ export function EditeurContacts(props: {
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-xs text-muted-foreground">
           Astuce : colle un bloc copié depuis Excel directement dans une case du tableau. <kbd>Entrée</kbd> passe à la ligne
-          suivante.
+          suivante. Pour changer un contact de campagne, glisse-le par sa poignée sur une campagne à gauche.
         </p>
         <div className="flex-1" />
         <Button onClick={() => setImportOuvert(true)}><ClipboardPasteIcon /> Ajouter en masse</Button>
@@ -289,7 +293,22 @@ export function EditeurContacts(props: {
               )}
               {lignes.map((l, i) => (
                 <tr key={i} className="border-b last:border-0 hover:bg-muted/30">
-                  <td className="px-2 text-xs text-muted-foreground tabular-nums">{i + 1}</td>
+                  <td
+                    className={cn("px-2 text-xs text-muted-foreground tabular-nums", l.Email && "cursor-grab active:cursor-grabbing")}
+                    draggable={!!l.Email}
+                    onDragStart={(e) => {
+                      e.dataTransfer.effectAllowed = "move"
+                      e.dataTransfer.setData("text/plain", l.Email ?? "")
+                      props.onGlisser({ campagne: props.campagne, emails: [(l.Email ?? "").trim().toLowerCase()], noms: nomAffiche({ Civilite: l.Civilite ?? "", Prenom: l.Prenom, Nom: l.Nom ?? "", Email: l.Email ?? "" }) })
+                    }}
+                    onDragEnd={() => props.onGlisser(null)}
+                    title={l.Email ? "Glisse ce contact sur une campagne, à gauche, pour l'y déplacer" : undefined}
+                  >
+                    <span className="flex items-center gap-0.5">
+                      <GripVerticalIcon className="size-3.5 opacity-50" />
+                      {i + 1}
+                    </span>
+                  </td>
                   {colonnesAffichees.map((c) => {
                     const invalide = c === "Email" && (erreurs[i] || doublons.has((l.Email ?? "").trim().toLowerCase()))
                     const risque = risques.get(i)?.cols.has(c)

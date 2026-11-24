@@ -16,6 +16,8 @@ import {
   TimerIcon,
   CopyIcon,
   PenLineIcon,
+  PencilIcon,
+  ArrowRightLeftIcon,
   TriangleAlertIcon,
   UsersIcon,
 } from "lucide-react"
@@ -51,6 +53,8 @@ import {
   chargerVersion,
   chargerSuivi,
   creerCampagne,
+  deplacerContacts,
+  renommerCampagne,
   enregistrerCc,
   enregistrerDelai,
   etapeSuivante,
@@ -65,6 +69,9 @@ import {
 import { ccInvalide, decouperAdresses } from "@/lib/apercu"
 import { cn } from "@/lib/utils"
 import { StatutBadge, statuts } from "@/StatutBadge"
+
+/** Contact en cours de glisser-déposer vers une autre campagne */
+export type ContactGlisse = { campagne: string; emails: string[]; noms: string }
 
 const nomsEtapes = ["", "Mail1", "Mail2 · relance 1", "Mail3 · relance 2", "Mail4 · relance 3"]
 const GUIDE = "__guide__"
@@ -89,6 +96,14 @@ export default function App() {
   const [enCours, setEnCours] = useState<number | null>(null)
   const [journal, setJournal] = useState<{ titre: string; texte: string; ok: boolean } | null>(null)
   const [nouvelle, setNouvelle] = useState<string | null>(null)
+  const [aRenommer, setARenommer] = useState<string | null>(null)
+  // Glisser-déposer d'un contact sur une campagne de la barre de gauche
+  const [glisse, setGlisse] = useState<ContactGlisse | null>(null)
+  const [survol, setSurvol] = useState<string | null>(null)
+  const [aDeplacer, setADeplacer] = useState<(ContactGlisse & { cible: string }) | null>(null)
+  const [deplacement, setDeplacement] = useState(false)
+  // Incrémenté après un déplacement : la campagne affichée relit ses fichiers
+  const [rechargement, setRechargement] = useState(0)
   const [onglet, setOnglet] = useState("suivi")
   const [etapeTexte, setEtapeTexte] = useState(1)
   const [modifs, setModifs] = useState<Record<string, boolean>>({})
@@ -242,6 +257,66 @@ export default function App() {
     }
   }
 
+  async function renommer(ancien: string, nom: string) {
+    try {
+      const r = await renommerCampagne(ancien, nom)
+      setARenommer(null)
+      toast.success(`Campagne renommée : « ${lireNomCampagne(r.nom).titre} »`)
+      if (selection === ancien) {
+        setSelection(r.nom)
+        try {
+          localStorage.setItem("campagne", r.nom)
+        } catch {
+          /* stockage indisponible : sans importance */
+        }
+      }
+      await actualiser()
+    } catch (e) {
+      toast.error((e as Error).message)
+    }
+  }
+
+  /** Un contact lâché sur une campagne : vérifications, puis confirmation */
+  function deposer(cible: string) {
+    const g = glisse
+    setSurvol(null)
+    setGlisse(null)
+    if (!g || g.campagne === cible) return
+    if (modifs.contacts) {
+      toast.error("Enregistre ou annule d'abord les modifications de l'onglet Contacts.")
+      return
+    }
+    const dejaLa = campagnes.find((c) => c.Nom === cible)?.Contacts.some((x) => g.emails.includes(x.Email.trim().toLowerCase()))
+    if (dejaLa) {
+      toast.error(`${g.noms} est déjà dans « ${lireNomCampagne(cible).titre} ».`)
+      return
+    }
+    setADeplacer({ ...g, cible })
+  }
+
+  async function confirmerDeplacement() {
+    if (!aDeplacer) return
+    setDeplacement(true)
+    try {
+      await deplacerContacts(aDeplacer.campagne, aDeplacer.cible, aDeplacer.emails)
+      toast.success(`${aDeplacer.noms} déplacé(e) vers « ${lireNomCampagne(aDeplacer.cible).titre} »`)
+      setADeplacer(null)
+      setRechargement((n) => n + 1)
+      await actualiser()
+    } catch (e) {
+      toast.error((e as Error).message)
+    } finally {
+      setDeplacement(false)
+    }
+  }
+
+  // Contacts déplacés déjà contactés dans leur campagne actuelle (mails envoyés ou brouillon en attente)
+  const dejaContactes = aDeplacer
+    ? (campagnes.find((c) => c.Nom === aDeplacer.campagne)?.Contacts ?? []).filter(
+        (x) => aDeplacer.emails.includes(x.Email.trim().toLowerCase()) && (x.Mail1 || x.Code === "brouillon"),
+      )
+    : []
+
   async function valider(nom: string) {
     try {
       const r = await creerCampagne(nom)
@@ -296,9 +371,22 @@ export default function App() {
               <button
                 key={c.Nom}
                 onClick={() => choisir(c.Nom)}
+                onDragOver={(e) => {
+                  if (!glisse || glisse.campagne === c.Nom) return
+                  e.preventDefault()
+                  e.dataTransfer.dropEffect = "move"
+                  if (survol !== c.Nom) setSurvol(c.Nom)
+                }}
+                onDragLeave={() => survol === c.Nom && setSurvol(null)}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  deposer(c.Nom)
+                }}
                 className={cn(
                   "flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted",
                   campagne?.Nom === c.Nom && "bg-muted font-medium",
+                  glisse && glisse.campagne !== c.Nom && "outline-1 outline-dashed outline-muted-foreground/40",
+                  survol === c.Nom && "bg-sky-100 outline-sky-500 dark:bg-sky-950",
                 )}
               >
                 <span className="min-w-0" title={c.Nom}>
@@ -392,6 +480,9 @@ export default function App() {
             onModifie={signalerModif}
             modifs={modifs}
             onIssueLocale={majIssueLocale}
+            onRenommer={() => (modifsEnCours ? toast.error("Enregistre d'abord tes modifications en cours.") : setARenommer(campagne.Nom))}
+            onGlisser={(g) => setGlisse(g)}
+            rechargement={rechargement}
           />
         )}
       </main>
@@ -437,6 +528,42 @@ export default function App() {
       </AlertDialog>
 
       <NouvelleCampagne ouvert={nouvelle !== null} onFermer={() => setNouvelle(null)} onCreer={(nom) => void valider(nom)} />
+      <NouvelleCampagne
+        ouvert={aRenommer !== null}
+        actuel={aRenommer ?? undefined}
+        onFermer={() => setARenommer(null)}
+        onCreer={(nom) => aRenommer && void renommer(aRenommer, nom)}
+      />
+
+      <AlertDialog open={!!aDeplacer} onOpenChange={(o) => !o && !deplacement && setADeplacer(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Déplacer {aDeplacer?.noms} vers « {aDeplacer && lireNomCampagne(aDeplacer.cible).titre} » ?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Le contact est retiré de « {aDeplacer && lireNomCampagne(aDeplacer.campagne).titre} » et ajouté en fin de liste de
+              l'autre campagne, avec ses objets communs. Son texte personnalisé, s'il en a un, le suit.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {dejaContactes.length > 0 && (
+            <p className="flex gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+              <TriangleAlertIcon className="mt-0.5 size-4 shrink-0" />
+              <span>
+                {dejaContactes.some((x) => x.Mail1)
+                  ? "Ce contact a déjà reçu des mails de cette campagne : ils ne seront plus suivis, et il recevra le Mail1 de la nouvelle campagne."
+                  : "Un brouillon de cette campagne l'attend dans Outlook : supprime-le pour ne pas l'envoyer par erreur."}
+              </span>
+            </p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deplacement}>Annuler</AlertDialogCancel>
+            <Button onClick={() => void confirmerDeplacement()} disabled={deplacement}>
+              {deplacement ? <Loader2Icon className="animate-spin" /> : <ArrowRightLeftIcon />} Déplacer
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
@@ -458,6 +585,10 @@ function VueCampagne(props: {
   onModifie: (zone: string, modifie: boolean) => void
   modifs: Record<string, boolean>
   onIssueLocale: (campagne: string, email: string, issue: string) => void
+  onRenommer: () => void
+  /** Début du glisser d'un contact (vers une campagne de la barre de gauche) ; null à la fin */
+  onGlisser: (g: ContactGlisse | null) => void
+  rechargement: number
 }) {
   const { campagne, suivi, chargement, filtre, setFiltre, enCours, onglet, setOnglet } = props
   const contacts = campagne.Contacts
@@ -476,7 +607,7 @@ function VueCampagne(props: {
     return () => {
       actif = false
     }
-  }, [campagne.Nom, version])
+  }, [campagne.Nom, version, props.rechargement])
   const campagneDemarree = contacts.some((c) => c.Mail1)
   // Étapes déjà envoyées par adresse : sert à alerter si on modifie un contact déjà contacté
   const envois = useMemo(() => {
@@ -540,6 +671,9 @@ function VueCampagne(props: {
             {lireNomCampagne(campagne.Nom).date && (
               <span className="text-sm font-normal text-muted-foreground">{lireNomCampagne(campagne.Nom).date}</span>
             )}
+            <Button variant="ghost" size="icon-xs" className="self-center text-muted-foreground" onClick={props.onRenommer} title="Renommer la campagne (titre, mois)">
+              <PencilIcon />
+            </Button>
           </h1>
           <p className="text-sm text-muted-foreground">{contacts.length} contact(s)</p>
           <ReglageDelai key={campagne.Nom} campagne={campagne.Nom} delai={campagne.DelaiRelance} onEnregistre={props.onActualiser} />
@@ -571,6 +705,7 @@ function VueCampagne(props: {
           {fichiers ? (
             <EditeurContacts
               key={campagne.Nom}
+              onGlisser={props.onGlisser}
               campagne={campagne.Nom}
               colonnes={fichiers.colonnes}
               contacts={fichiers.contacts}
@@ -715,7 +850,18 @@ function VueCampagne(props: {
               </TableRow>
             )}
             {visibles.map((c, i) => (
-              <TableRow key={`${i}-${c.Email}`}>
+              <TableRow
+                key={`${i}-${c.Email}`}
+                draggable={!!c.Email}
+                onDragStart={(e) => {
+                  e.dataTransfer.effectAllowed = "move"
+                  e.dataTransfer.setData("text/plain", c.Email)
+                  props.onGlisser({ campagne: campagne.Nom, emails: [c.Email.trim().toLowerCase()], noms: nomAffiche(c) })
+                }}
+                onDragEnd={() => props.onGlisser(null)}
+                className="cursor-grab active:cursor-grabbing"
+                title="Glisse ce contact sur une campagne, à gauche, pour l'y déplacer"
+              >
                 <TableCell className="pl-4">
                   <div className="font-medium">{nomAffiche(c)}</div>
                   <div className="text-xs text-muted-foreground">{c.Email || "adresse manquante"}</div>

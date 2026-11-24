@@ -148,6 +148,20 @@ export async function creerCampagne(nom: string) {
 }
 
 
+/** Renomme une campagne (dossier "AAAA-MM Titre") */
+export async function renommerCampagne(campagne: string, nom: string) {
+  return lire<{ ok: boolean; nom: string }>(
+    await fetch("/api/campagnes/renommer", { method: "POST", headers: entetes, body: JSON.stringify({ campagne, nom }) }),
+  )
+}
+
+/** Déplace des contacts (par adresse) d'une campagne à une autre */
+export async function deplacerContacts(source: string, cible: string, emails: string[]) {
+  return lire<{ ok: boolean; nb: number }>(
+    await fetch("/api/contacts/deplacer", { method: "POST", headers: entetes, body: JSON.stringify({ source, cible, emails }) }),
+  )
+}
+
 export async function enregistrerDelai(campagne: string, delaiRelanceJours: number) {
   return lire<{ ok: boolean }>(
     await fetch("/api/parametres", { method: "PUT", headers: entetes, body: JSON.stringify({ campagne, delaiRelanceJours }) }),
