@@ -276,8 +276,8 @@ export function Guide() {
               clique sur <strong>Enregistrer</strong>. Le contact est ajouté en fin de liste avec les objets communs.
             </p>
             <p>
-              <strong>Changer un contact de campagne</strong> : glisse-le (sa ligne dans le suivi, ou sa poignée à gauche dans
-              l'onglet Contacts) sur une autre campagne de la barre de gauche, puis confirme. Il est ajouté en fin de liste avec
+              <strong>Changer un contact de campagne</strong> : survole sa ligne (dans le suivi ou l'onglet Contacts),
+              attrape la poignée <strong>⋮⋮</strong> qui apparaît à gauche et glisse-la sur une autre campagne de la barre de gauche, puis confirme. Il est ajouté en fin de liste avec
               les objets de cette campagne et son texte personnalisé le suit. S'il a déjà reçu des mails, ceux-ci ne sont plus
               suivis et il recevra le Mail1 de sa nouvelle campagne.
             </p>

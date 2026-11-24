@@ -17,6 +17,7 @@ import {
   CopyIcon,
   PenLineIcon,
   PencilIcon,
+  GripVerticalIcon,
   ArrowRightLeftIcon,
   TriangleAlertIcon,
   UsersIcon,
@@ -832,7 +833,8 @@ function VueCampagne(props: {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="pl-4">Contact</TableHead>
+              <TableHead className="w-6 px-0" />
+              <TableHead className="pl-1">Contact</TableHead>
               <TableHead>Entreprise</TableHead>
               {[1, 2, 3, 4].map((n) => <TableHead key={n}>Mail{n}</TableHead>)}
               <TableHead>Statut</TableHead>
@@ -842,7 +844,7 @@ function VueCampagne(props: {
           <TableBody>
             {visibles.length === 0 && (
               <TableRow>
-                <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
                   {contacts.length === 0
                     ? "Aucun contact. Ajoute-les dans l'onglet « Contacts »."
                     : "Aucun contact ne correspond."}
@@ -850,19 +852,25 @@ function VueCampagne(props: {
               </TableRow>
             )}
             {visibles.map((c, i) => (
-              <TableRow
-                key={`${i}-${c.Email}`}
-                draggable={!!c.Email}
-                onDragStart={(e) => {
-                  e.dataTransfer.effectAllowed = "move"
-                  e.dataTransfer.setData("text/plain", c.Email)
-                  props.onGlisser({ campagne: campagne.Nom, emails: [c.Email.trim().toLowerCase()], noms: nomAffiche(c) })
-                }}
-                onDragEnd={() => props.onGlisser(null)}
-                className="cursor-grab active:cursor-grabbing"
-                title="Glisse ce contact sur une campagne, à gauche, pour l'y déplacer"
-              >
-                <TableCell className="pl-4">
+              <TableRow key={`${i}-${c.Email}`} className="group">
+                <TableCell className="w-6 px-0 pl-1">
+                  {c.Email && (
+                    <span
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.effectAllowed = "move"
+                        e.dataTransfer.setData("text/plain", c.Email)
+                        props.onGlisser({ campagne: campagne.Nom, emails: [c.Email.trim().toLowerCase()], noms: nomAffiche(c) })
+                      }}
+                      onDragEnd={() => props.onGlisser(null)}
+                      className="flex h-6 w-4 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted hover:text-foreground cursor-grab active:cursor-grabbing"
+                      title="Glisse ce contact sur une campagne, à gauche, pour l'y déplacer"
+                    >
+                      <GripVerticalIcon className="size-4" />
+                    </span>
+                  )}
+                </TableCell>
+                <TableCell className="pl-1">
                   <div className="font-medium">{nomAffiche(c)}</div>
                   <div className="text-xs text-muted-foreground">{c.Email || "adresse manquante"}</div>
                   {(c.TextesPerso?.length ?? 0) > 0 && (

@@ -230,7 +230,7 @@ export function EditeurContacts(props: {
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-xs text-muted-foreground">
           Astuce : colle un bloc copié depuis Excel directement dans une case du tableau. <kbd>Entrée</kbd> passe à la ligne
-          suivante. Pour changer un contact de campagne, glisse-le par sa poignée sur une campagne à gauche.
+          suivante. Pour changer un contact de campagne, glisse-le par sa poignée ⋮⋮ (au survol de la ligne) sur une campagne à gauche.
         </p>
         <div className="flex-1" />
         <Button onClick={() => setImportOuvert(true)}><ClipboardPasteIcon /> Ajouter en masse</Button>
@@ -276,7 +276,7 @@ export function EditeurContacts(props: {
           <table className="w-max min-w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
-                <th className="w-10 px-2 py-2 font-medium">#</th>
+                <th className="w-14 pr-2 pl-6 py-2 font-medium">#</th>
                 {colonnesAffichees.map((c) => (
                   <th key={c} className={cn("px-1 py-2 font-medium", largeur[c] ?? "w-72")}>{libelleColonne[c] ?? c}</th>
                 ))}
@@ -292,20 +292,26 @@ export function EditeurContacts(props: {
                 </tr>
               )}
               {lignes.map((l, i) => (
-                <tr key={i} className="border-b last:border-0 hover:bg-muted/30">
-                  <td
-                    className={cn("px-2 text-xs text-muted-foreground tabular-nums", l.Email && "cursor-grab active:cursor-grabbing")}
-                    draggable={!!l.Email}
-                    onDragStart={(e) => {
-                      e.dataTransfer.effectAllowed = "move"
-                      e.dataTransfer.setData("text/plain", l.Email ?? "")
-                      props.onGlisser({ campagne: props.campagne, emails: [(l.Email ?? "").trim().toLowerCase()], noms: nomAffiche({ Civilite: l.Civilite ?? "", Prenom: l.Prenom, Nom: l.Nom ?? "", Email: l.Email ?? "" }) })
-                    }}
-                    onDragEnd={() => props.onGlisser(null)}
-                    title={l.Email ? "Glisse ce contact sur une campagne, à gauche, pour l'y déplacer" : undefined}
-                  >
-                    <span className="flex items-center gap-0.5">
-                      <GripVerticalIcon className="size-3.5 opacity-50" />
+                <tr key={i} className="group border-b last:border-0 hover:bg-muted/30">
+                  <td className="pr-2 pl-1 text-xs text-muted-foreground tabular-nums">
+                    <span className="flex items-center gap-1">
+                      {l.Email ? (
+                        <span
+                          draggable
+                          onDragStart={(e) => {
+                            e.dataTransfer.effectAllowed = "move"
+                            e.dataTransfer.setData("text/plain", l.Email ?? "")
+                            props.onGlisser({ campagne: props.campagne, emails: [(l.Email ?? "").trim().toLowerCase()], noms: nomAffiche({ Civilite: l.Civilite ?? "", Prenom: l.Prenom, Nom: l.Nom ?? "", Email: l.Email ?? "" }) })
+                          }}
+                          onDragEnd={() => props.onGlisser(null)}
+                          className="flex h-6 w-4 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted hover:text-foreground cursor-grab active:cursor-grabbing"
+                          title="Glisse ce contact sur une campagne, à gauche, pour l'y déplacer"
+                        >
+                          <GripVerticalIcon className="size-4" />
+                        </span>
+                      ) : (
+                        <span className="w-4" />
+                      )}
                       {i + 1}
                     </span>
                   </td>
