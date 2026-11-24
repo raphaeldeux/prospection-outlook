@@ -18,6 +18,7 @@
 #   POST /api/campagnes -> cree une campagne a partir de Programme\Modele campagne
 #   POST /api/campagnes/renommer -> renomme le dossier d'une campagne (mois, annee, titre)
 #   POST /api/contacts/deplacer  -> deplace des contacts d'une campagne a une autre
+#   GET  /api/bibliotheque -> Bibliotheque.ps1 : exemples de mails envoyes, par campagne et etape (lecture seule)
 #
 # Securite : ecoute uniquement sur localhost, et chaque appel /api doit porter l'en-tete
 # X-Prospection (un site web externe ne peut pas l'ajouter sans autorisation CORS, qu'on ne donne pas).
@@ -293,6 +294,20 @@ try {
                 if ($chemin -eq "/api/ping") {
                     # signe de vie de la page ouverte (voir l'arret automatique plus haut)
                     Send-Json $ctx 200 @{ ok = $true }
+                    continue
+                }
+
+                if ($chemin -eq "/api/bibliotheque" -and $req.HttpMethod -eq "GET") {
+                    # Bibliotheque de mails type : un exemple de mail envoye par campagne et par etape (Outlook, lecture seule)
+                    Write-Host "$(Get-Date -Format HH:mm:ss) Lecture de la bibliotheque de mails..."
+                    $tmp = [IO.Path]::Combine($env:TEMP, "prospection-biblio-$([guid]::NewGuid().ToString('N')).json")
+                    $res = Invoke-ScriptEnfant "& $(Q (Join-Path $scripts 'Bibliotheque.ps1')) -JsonPath $(Q $tmp)"
+                    if ($res.Code -eq 0 -and (Test-Path $tmp)) {
+                        Send-Json $ctx 200 ([IO.File]::ReadAllText($tmp, $utf8)) -Brut
+                    } else {
+                        Send-Json $ctx 500 @{ erreur = "Lecture de la bibliotheque impossible : $(($res.Journal -replace '^ERREUR : ', '').Trim())" }
+                    }
+                    Remove-Item $tmp -ErrorAction SilentlyContinue
                     continue
                 }
 

@@ -21,6 +21,7 @@ const plan = [
       { id: "contacts", titre: "Ajouter des contacts" },
       { id: "textes", titre: "Rédiger les mails" },
       { id: "personnalises", titre: "Un objet ou un texte différent pour un contact" },
+      { id: "bibliotheque", titre: "La bibliothèque de mails" },
       { id: "regles", titre: "Les règles à respecter" },
     ],
   },
@@ -376,6 +377,25 @@ export function Guide() {
               reçoit de nouveau le texte commun. L'ancien texte reste visible dans la liste (« n'est plus dans les contacts ») pour
               le recopier ou le supprimer.
             </Attention>
+          </Section>
+
+          <Section id="bibliotheque" titre="La bibliothèque de mails">
+            <p>
+              Bouton <strong>Bibliothèque de mails</strong>, en bas à gauche : pour chaque campagne et chaque étape, un exemple
+              de mail <strong>réellement envoyé</strong>, lu dans les Éléments envoyés d'Outlook. La signature et le message
+              cité des relances sont retirés, et le nom, la civilité et l'entreprise du destinataire sont remis en variables.
+            </p>
+            <ul className="list-disc space-y-1 pl-5">
+              <li>Cherche un mot, filtre par campagne ou par type (premiers mails, relances).</li>
+              <li><strong>Copier</strong> : copie l'objet et le texte dans le presse-papier.</li>
+              <li>
+                <strong>Utiliser pour…</strong> : choisis une campagne et une étape ; l'objet et le texte sont placés dans son
+                onglet Textes des mails. Relis-les, puis clique sur <strong>Enregistrer</strong>.
+              </li>
+            </ul>
+            <p>
+              Le gras du mail d'origine n'est pas repris : remets-le avec le bouton <strong>B</strong> si besoin.
+            </p>
           </Section>
 
           <Section id="regles" titre="Les règles à respecter">

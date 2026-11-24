@@ -92,6 +92,27 @@ export async function chargerSuivi(): Promise<Suivi> {
   }
 }
 
+/** Un mail type de la bibliothèque : exemple réellement envoyé pour une campagne et une étape */
+export type MailType = {
+  Campagne: string
+  Etape: number
+  /** Objet de la campagne, avec ses variables ({{ENTREPRISE}}…) */
+  Objet: string
+  /** Objet tel qu'il est parti */
+  ObjetEnvoye: string
+  /** Texte réellement envoyé, sans signature, noms remis en variables */
+  Texte: string
+  EnvoyeLe: string
+  Destinataire: string
+  NbEnvois: number
+  Personnalise: boolean
+}
+
+export async function chargerBibliotheque(): Promise<{ GenereLe: string; Mails: MailType[] }> {
+  const r = await lire<{ GenereLe: string; Mails: MailType[] | MailType | null }>(await fetch("/api/bibliotheque", { headers: entetes }))
+  return { ...r, Mails: tableau(r.Mails) }
+}
+
 export async function genererBrouillons(campagne: string, etape: number) {
   return lire<{ ok: boolean; journal: string }>(
     await fetch("/api/generer", { method: "POST", headers: entetes, body: JSON.stringify({ campagne, etape }) }),

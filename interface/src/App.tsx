@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   BookOpenIcon,
+  LibraryIcon,
   CircleArrowUpIcon,
   CheckIcon,
   SettingsIcon,
@@ -45,6 +46,7 @@ import { ActionsContact } from "@/ActionsContact"
 import { AFaire } from "@/AFaire"
 import { DerniereActualisation } from "@/DerniereActualisation"
 import { Guide } from "@/Guide"
+import { Bibliotheque, type MailRepris } from "@/Bibliotheque"
 import { detailStatut, nomAffiche } from "@/lib/statut"
 import { NouvelleCampagne } from "@/NouvelleCampagne"
 import { SigneDeVie } from "@/SigneDeVie"
@@ -92,6 +94,7 @@ const nomsEtapes = ["", "Mail1", "Mail2 · relance 1", "Mail3 · relance 2", "Ma
 const GUIDE = "__guide__"
 const AFAIRE = "__afaire__"
 const PARAMETRES = "__parametres__"
+const BIBLIOTHEQUE = "__bibliotheque__"
 
 function lireSelection() {
   try {
@@ -119,6 +122,7 @@ export default function App() {
   const [deplacement, setDeplacement] = useState(false)
   // Incrémenté après un déplacement : la campagne affichée relit ses fichiers
   const [rechargement, setRechargement] = useState(0)
+  const [mailRepris, setMailRepris] = useState<MailRepris | null>(null)
   const [onglet, setOnglet] = useState("suivi")
   const [etapeTexte, setEtapeTexte] = useState(1)
   const [modifs, setModifs] = useState<Record<string, boolean>>({})
@@ -215,9 +219,10 @@ export default function App() {
     }
   }, [])
 
-  function choisir(nom: string, filtreInitial: Code | null = null) {
-    if (nom === selection && !filtreInitial) return
-    if (nom !== selection && modifsEnCours && !window.confirm("Des modifications ne sont pas enregistrées. Les abandonner ?")) return
+  /** Ouvre une page ou une campagne ; faux si l'utilisateur a préféré garder ses modifications en cours */
+  function choisir(nom: string, filtreInitial: Code | null = null): boolean {
+    if (nom === selection && !filtreInitial) return true
+    if (nom !== selection && modifsEnCours && !window.confirm("Des modifications ne sont pas enregistrées. Les abandonner ?")) return false
     if (nom !== selection) setModifs({})
     setSelection(nom)
     setFiltre(filtreInitial)
@@ -227,12 +232,21 @@ export default function App() {
     } catch {
       /* stockage indisponible : sans importance */
     }
+    return true
+  }
+
+  /** Mail de la bibliothèque repris dans l'onglet Textes d'une campagne (à relire puis enregistrer) */
+  function utiliserMailType(m: Omit<MailRepris, "id">) {
+    if (!choisir(m.campagne)) return
+    setOnglet("textes")
+    setEtapeTexte(m.etape)
+    setMailRepris({ ...m, id: Date.now() })
   }
 
   // les plus récentes en premier (le nom de dossier commence par AAAA-MM)
   const campagnes = [...(suivi?.Campagnes ?? [])].sort((a, b) => b.Nom.localeCompare(a.Nom))
   const campagne: Campagne | undefined =
-    selection === GUIDE || selection === AFAIRE || selection === PARAMETRES ? undefined : (campagnes.find((c) => c.Nom === selection) ?? campagnes[0])
+    selection === GUIDE || selection === AFAIRE || selection === PARAMETRES || selection === BIBLIOTHEQUE ? undefined : (campagnes.find((c) => c.Nom === selection) ?? campagnes[0])
   const totalAFaire = campagnes.reduce(
     (s, c) => s + c.Contacts.filter((x) => ["relance", "afaire", "brouillon"].includes(x.Code)).length,
     0,
@@ -431,6 +445,13 @@ export default function App() {
             <PlusIcon /> Nouvelle campagne
           </Button>
           <Button
+            variant={selection === BIBLIOTHEQUE ? "secondary" : "ghost"}
+            className="w-full justify-start"
+            onClick={() => choisir(BIBLIOTHEQUE)}
+          >
+            <LibraryIcon /> Bibliothèque de mails
+          </Button>
+          <Button
             variant={selection === GUIDE ? "secondary" : "ghost"}
             className="w-full justify-start"
             onClick={() => choisir(GUIDE)}
@@ -458,6 +479,8 @@ export default function App() {
       <main className="flex-1 overflow-y-auto p-6">
         {selection === GUIDE ? (
           <Guide />
+        ) : selection === BIBLIOTHEQUE ? (
+          <Bibliotheque campagnes={campagnes.map((c) => c.Nom)} onUtiliser={utiliserMailType} />
         ) : selection === PARAMETRES ? (
           <Parametres modifsEnCours={modifsEnCours} />
         ) : selection === AFAIRE && suivi && campagnes.length > 0 ? (
@@ -502,6 +525,7 @@ export default function App() {
             onRenommer={() => (modifsEnCours ? toast.error("Enregistre d'abord tes modifications en cours.") : setARenommer(campagne.Nom))}
             onGlisser={(g) => setGlisse(g)}
             rechargement={rechargement}
+            mailRepris={mailRepris}
           />
         )}
       </main>
@@ -608,6 +632,7 @@ function VueCampagne(props: {
   /** Début du glisser d'un contact (vers une campagne de la barre de gauche) ; null à la fin */
   onGlisser: (g: ContactGlisse | null) => void
   rechargement: number
+  mailRepris: MailRepris | null
 }) {
   const { campagne, suivi, chargement, filtre, setFiltre, enCours, onglet, setOnglet } = props
   const contacts = campagne.Contacts
@@ -754,6 +779,7 @@ function VueCampagne(props: {
               setEtape={props.setEtapeTexte}
               onEnregistre={apresEnregistrement}
               onModifie={(m) => props.onModifie("textes", m)}
+              mailRepris={props.mailRepris}
             />
           ) : (
             <Skeleton className="h-96" />

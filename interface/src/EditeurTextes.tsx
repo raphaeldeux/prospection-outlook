@@ -30,6 +30,10 @@ import { objetDeCampagne, resoudreVariables, texteVersHtml } from "@/lib/apercu"
 import { nomAffiche } from "@/lib/statut"
 import { cn } from "@/lib/utils"
 import { pl } from "@/lib/texte"
+import type { MailRepris } from "@/Bibliotheque"
+
+/** Mails de la bibliothèque déjà placés dans un éditeur : pas réappliqués quand l'onglet est recréé */
+const dejaRepris = new Set<number>()
 
 const libelles = ["", "Mail1", "Mail2 · relance 1", "Mail3 · relance 2", "Mail4 · relance 3"]
 
@@ -58,6 +62,8 @@ export function EditeurTextes(props: {
   setEtape: (n: number) => void
   onEnregistre: () => void
   onModifie: (modifie: boolean) => void
+  /** Mail de la bibliothèque à reprendre comme texte et objet communs d'une étape (non enregistré) */
+  mailRepris?: MailRepris | null
 }) {
   const { campagne, etape, setEtape } = props
 
@@ -92,6 +98,17 @@ export function EditeurTextes(props: {
   const [objetsEdites, setObjetsEdites] = useState<Record<string, string>>({})
   const [objetsEnregistres, setObjetsEnregistres] = useState<Record<string, string>>({})
   const [cible, setCible] = useState<Cible>("")
+
+  // Mail repris de la bibliothèque : placé dans le texte et l'objet communs de l'étape, en modification non enregistrée
+  const repris = props.mailRepris
+  useEffect(() => {
+    if (!repris || repris.campagne !== campagne || dejaRepris.has(repris.id)) return
+    dejaRepris.add(repris.id)
+    setCible("")
+    setBrouillons((b) => ({ ...b, [cle("", repris.etape)]: repris.texte }))
+    setObjetsEdites((o) => ({ ...o, [cle("", repris.etape)]: repris.objet }))
+    toast.success(`Mail repris dans ${libelles[repris.etape]} : relis-le puis clique sur « Enregistrer ».`)
+  }, [repris?.id]) // eslint-disable-line react-hooks/exhaustive-deps
   const [sauvegarde, setSauvegarde] = useState(false)
   const [confirmerRetour, setConfirmerRetour] = useState(false)
   const [apercuContact, setApercuContact] = useState(0)
