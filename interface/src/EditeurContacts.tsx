@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input"
 import { ImportContacts } from "@/ImportContacts"
 import { NouveauContact } from "@/NouveauContact"
 import { enregistrerContacts, type LigneContact } from "@/lib/api"
-import { ccInvalide, estColonneObjet, estEmailValide, objetDeCampagne } from "@/lib/apercu"
+import { estColonneObjet, estEmailValide, objetDeCampagne } from "@/lib/apercu"
 import { normaliserCivilite } from "@/lib/import"
 import { cn } from "@/lib/utils"
 
@@ -27,7 +27,6 @@ const libelleColonne: Record<string, string> = {
   Entreprise: "Entreprise",
   Telephone: "Téléphone",
   Email: "E-mail",
-  CC: "CC de ce contact",
   Sujet1: "Objet Mail1",
   Sujet2: "Objet Mail2",
   Sujet3: "Objet Mail3",
@@ -40,7 +39,6 @@ const largeur: Record<string, string> = {
   Entreprise: "w-44",
   Telephone: "w-32",
   Email: "min-w-80",
-  CC: "min-w-64",
 }
 
 
@@ -53,8 +51,6 @@ export function EditeurContacts(props: {
   /** Objets communs mémorisés pour la campagne (parametres.json), donnés aux contacts ajoutés */
   objets?: (string | null)[] | null
   campagneDemarree: boolean
-  /** Adresses en copie de toute la campagne (rappelées dans le formulaire d'ajout) */
-  ccCampagne: string
   /** Étapes déjà envoyées, par adresse e-mail (en minuscules), d'après le suivi Outlook */
   envois: Record<string, number[]>
   onEnregistre: () => void
@@ -63,7 +59,9 @@ export function EditeurContacts(props: {
   const { colonnes, campagneDemarree } = props
   // Les objets (Sujet1..4) ne sont pas affichés dans le tableau : objet commun dans le bloc ci-dessous, objet
   // propre à un contact dans l'onglet Textes. Ils restent dans chaque ligne et sont enregistrés tels quels.
-  const colonnesAffichees = colonnes.filter((c) => !estColonneObjet(c))
+  // La colonne CC (copie propre à un contact) n'est pas affichée non plus : la copie se règle pour toute la campagne,
+  // sous son nom. Une valeur saisie dans le CSV reste enregistrée et appliquée par les scripts.
+  const colonnesAffichees = colonnes.filter((c) => !estColonneObjet(c) && c !== "CC")
   const [confirmerRisques, setConfirmerRisques] = useState(false)
   const [lignes, setLignes] = useState<LigneContact[]>(props.contacts)
   const [reference, setReference] = useState(JSON.stringify(props.contacts))
@@ -92,7 +90,6 @@ export function EditeurContacts(props: {
     [lignes],
   )
   const nbErreurs = erreurs.filter(Boolean).length
-  const nbCcInvalides = lignes.filter((l) => ccInvalide(l.CC ?? "")).length
   const doublons = useMemo(() => {
     const vus = new Map<string, number>()
     lignes.forEach((l) => l.Email && vus.set(l.Email.trim().toLowerCase(), (vus.get(l.Email.trim().toLowerCase()) ?? 0) + 1))
@@ -238,12 +235,11 @@ export function EditeurContacts(props: {
         </Button>
       </div>
 
-      {(nbErreurs > 0 || doublons.size > 0 || nbCcInvalides > 0) && (
+      {(nbErreurs > 0 || doublons.size > 0) && (
         <p className="flex items-center gap-1.5 text-sm text-amber-700 dark:text-amber-300">
           <TriangleAlertIcon className="size-4" />
           {nbErreurs > 0 && `${nbErreurs} adresse(s) e-mail invalide(s) ou manquante(s), en rouge. `}
           {doublons.size > 0 && `${doublons.size} adresse(s) en double. `}
-          {nbCcInvalides > 0 && `${nbCcInvalides} case(s) « CC de ce contact » avec une adresse invalide (sépare plusieurs adresses par ;).`}
         </p>
       )}
 
@@ -295,9 +291,7 @@ export function EditeurContacts(props: {
                 <tr key={i} className="border-b last:border-0 hover:bg-muted/30">
                   <td className="px-2 text-xs text-muted-foreground tabular-nums">{i + 1}</td>
                   {colonnesAffichees.map((c) => {
-                    const invalide =
-                      (c === "Email" && (erreurs[i] || doublons.has((l.Email ?? "").trim().toLowerCase()))) ||
-                      (c === "CC" && ccInvalide(l.CC ?? ""))
+                    const invalide = c === "Email" && (erreurs[i] || doublons.has((l.Email ?? "").trim().toLowerCase()))
                     const risque = risques.get(i)?.cols.has(c)
                     return (
                       <td
@@ -327,7 +321,6 @@ export function EditeurContacts(props: {
                             value={l[c] ?? ""}
                             onChange={(e) => modifier(i, c, e.target.value)}
                             aria-invalid={invalide || undefined}
-                            placeholder={c === "CC" ? "adresse ; adresse…" : undefined}
                             className="h-7 border-transparent bg-transparent px-1.5 shadow-none hover:border-input"
                           />
                         )}
@@ -412,7 +405,6 @@ export function EditeurContacts(props: {
         colonnes={colonnes}
         ligneDeDepart={ligneAvecObjets}
         emailsExistants={emailsExistants}
-        ccCampagne={props.ccCampagne}
         autresModifs={modifie}
         onAjouter={ajouterUnContact}
       />

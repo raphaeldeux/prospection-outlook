@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   BookOpenIcon,
+  CircleArrowUpIcon,
   SettingsIcon,
   InboxIcon,
   ListTodoIcon,
@@ -154,7 +155,9 @@ export default function App() {
     void actualiser()
   }, [actualiser])
 
-  // Vérifie une fois au démarrage si une mise à jour est disponible (pastille sur « Paramètres »)
+  // Vérifie si une mise à jour est disponible (pastille sur « Paramètres ») : au démarrage, puis toutes les heures
+  // et quand la fenêtre revient au premier plan (au plus une fois par quart d'heure). L'API GitHub sans compte est
+  // limitée à 60 appels par heure.
   const [majDispo, setMajDispo] = useState(false)
   // Version installée, affichée à côté du nom de l'outil (lecture locale, sans attendre GitHub)
   const [versionInstallee, setVersionInstallee] = useState("")
@@ -162,9 +165,24 @@ export default function App() {
     chargerVersion(true)
       .then((v) => setVersionInstallee(v.installee?.version ?? ""))
       .catch(() => {})
-    chargerVersion()
-      .then((v) => setMajDispo(v.aJour === false))
-      .catch(() => {})
+    let derniere = 0
+    const verifier = () => {
+      if (Date.now() - derniere < 15 * 60_000) return
+      derniere = Date.now()
+      chargerVersion()
+        .then((v) => v.aJour !== null && setMajDispo(!v.aJour))
+        .catch(() => {})
+    }
+    verifier()
+    const minuteur = window.setInterval(verifier, 60 * 60_000)
+    const auPremierPlan = () => document.visibilityState === "visible" && verifier()
+    window.addEventListener("focus", auPremierPlan)
+    document.addEventListener("visibilitychange", auPremierPlan)
+    return () => {
+      window.clearInterval(minuteur)
+      window.removeEventListener("focus", auPremierPlan)
+      document.removeEventListener("visibilitychange", auPremierPlan)
+    }
   }, [])
 
   function choisir(nom: string, filtreInitial: Code | null = null) {
@@ -319,8 +337,11 @@ export default function App() {
           >
             <SettingsIcon /> Paramètres
             {majDispo && (
-              <span className="ml-auto rounded-full bg-sky-100 px-1.5 text-xs text-sky-900 dark:bg-sky-950 dark:text-sky-200" title="Une mise à jour est disponible">
-                Mise à jour
+              <span
+                className="ml-auto flex items-center gap-1 rounded-full bg-sky-100 px-1.5 py-0.5 text-xs text-sky-900 dark:bg-sky-950 dark:text-sky-200"
+                title="Une nouvelle version est disponible : clique pour l'installer"
+              >
+                <CircleArrowUpIcon className="size-3.5" /> Mise à jour dispo
               </span>
             )}
           </Button>
@@ -555,7 +576,6 @@ function VueCampagne(props: {
               contacts={fichiers.contacts}
               objets={fichiers.objets}
               campagneDemarree={campagneDemarree}
-              ccCampagne={campagne.Cc ?? ""}
               envois={envois}
               onEnregistre={apresEnregistrement}
               onModifie={(m) => props.onModifie("contacts", m)}
@@ -787,7 +807,7 @@ function ReglageDelai(props: { campagne: string; delai: number; onEnregistre: ()
   )
 }
 
-/** Adresses mises en copie (CC) de tous les brouillons de la campagne, en plus de la colonne « CC de ce contact » */
+/** Adresses mises en copie (CC) de tous les brouillons de la campagne */
 function ReglageCc(props: { campagne: string; cc: string; onEnregistre: () => void }) {
   const [valeur, setValeur] = useState(props.cc)
   const [sauvegarde, setSauvegarde] = useState(false)
@@ -800,7 +820,7 @@ function ReglageCc(props: { campagne: string; cc: string; onEnregistre: () => vo
     try {
       await enregistrerCc(props.campagne, normaliser(valeur))
       const n = decouperAdresses(valeur).length
-      toast.success(n === 0 ? "Plus personne en copie des mails de la campagne" : `${n} adresse(s) en copie des mails de tous les contacts`)
+      toast.success(n === 0 ? "Plus personne en copie des mails" : `${n} adresse(s) en copie de tous les mails de la campagne`)
       setValeur(normaliser(valeur))
       props.onEnregistre()
     } catch (e) {
@@ -819,9 +839,7 @@ function ReglageCc(props: { campagne: string; cc: string; onEnregistre: () => vo
       }}
     >
       <CopyIcon className="size-4" />
-      <span title="Ces adresses sont mises en copie de chaque brouillon (Mail1 et relances), pour tous les contacts de la campagne. Pour une copie propre à un contact, utilise sa colonne « CC de ce contact » dans l'onglet Contacts.">
-        Copie (CC) sur les mails de <strong className="font-medium text-foreground">tous les contacts</strong>
-      </span>
+      <span title="Ces adresses sont mises en copie de chaque brouillon de la campagne (Mail1 et relances).">En copie (CC) des mails</span>
       <Input
         value={valeur}
         onChange={(e) => setValeur(e.target.value)}

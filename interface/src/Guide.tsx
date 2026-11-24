@@ -291,13 +291,6 @@ export function Guide() {
                   <tr><td className="text-foreground">Entreprise</td><td>Variable {"{{ENTREPRISE}}"}</td></tr>
                   <tr><td className="text-foreground">Téléphone</td><td>Facultatif, pour mémoire</td></tr>
                   <tr><td className="text-foreground">E-mail</td><td>Obligatoire ; en rouge si invalide ou en double</td></tr>
-                  <tr>
-                    <td className="text-foreground">CC de ce contact</td>
-                    <td>
-                      Facultatif : adresses mises en copie des mails de ce contact seulement (plusieurs adresses séparées par ;).
-                      Elles s'ajoutent à la copie de toute la campagne, réglée sous le nom de la campagne.
-                    </td>
-                  </tr>
                 </tbody>
               </table>
             </div>
@@ -436,10 +429,8 @@ export function Guide() {
               les brouillons ».
             </p>
             <p>
-              Juste en dessous, « Copie (CC) sur les mails de tous les contacts » : les adresses indiquées (un collègue, un
-              manager…, séparées par ;) sont mises en <strong>copie (CC)</strong> de tous les brouillons de la campagne, Mail1
-              et relances. Pour une copie propre à un contact, remplis plutôt sa colonne « CC de ce contact » dans l'onglet
-              Contacts ; les deux s'additionnent. Le réglage s'applique aux brouillons créés ensuite, pas à ceux qui existent déjà.
+              Juste en dessous, « En copie (CC) des mails » : les adresses indiquées (un collègue, un manager…, séparées par
+              ;) sont mises en <strong>copie (CC)</strong> de tous les brouillons de la campagne, Mail1 et relances. Le réglage s'applique aux brouillons créés ensuite, pas à ceux qui existent déjà.
             </p>
           </Section>
 
@@ -489,7 +480,7 @@ export function Guide() {
             <p>
               Va dans <strong>Paramètres</strong> (en bas à gauche) : version installée, nouveautés, et bouton{" "}
               <strong>Mettre à jour</strong>. La mise à jour prend environ une minute, ne touche jamais à tes campagnes, et
-              l'interface redémarre seule : la page se recharge d'elle-même sur la nouvelle version. Une pastille signale quand une nouvelle version est disponible.
+              l'interface redémarre seule : la page se recharge d'elle-même sur la nouvelle version. Quand une nouvelle version est publiée, un badge « Mise à jour dispo » apparaît à côté de Paramètres (l'outil vérifie toutes les heures et quand tu reviens sur la fenêtre).
             </p>
             <p>
               Seules les <strong>versions publiées</strong> (releases v1.7.0, v1.8.0…) sont installées, jamais un travail en cours.
