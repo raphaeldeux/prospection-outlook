@@ -29,9 +29,11 @@ export function detailStatut(c: Contact): string {
     case "afaire":
       return "Pas encore dans Outlook : « Créer les brouillons »"
     case "relance":
-      return `Mail${n - 1} envoyé ${depuis(c.JoursDepuisEnvoi)} : Mail${n} possible`
+      return c.ARediger
+        ? `Mail${n - 1} envoyé ${depuis(c.JoursDepuisEnvoi)} : Mail${n} à rédiger`
+        : `Mail${n - 1} envoyé ${depuis(c.JoursDepuisEnvoi)} : Mail${n} possible`
     case "attente":
-      return `Mail${n} possible à partir du ${jjmm(c.RelancePossibleLe)}`
+      return `Mail${n} possible à partir du ${jjmm(c.RelancePossibleLe)}${c.ARediger ? " (à rédiger)" : ""}`
     case "termine":
       return c.NbEtapes < 4 ? `Pas de réponse après Mail${c.NbEtapes} (dernière étape prévue)` : "Pas de réponse après les 4 mails"
     default:

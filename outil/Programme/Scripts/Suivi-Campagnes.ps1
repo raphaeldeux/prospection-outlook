@@ -125,6 +125,10 @@ foreach ($dossier in $dossiers) {
     $issues = Get-Issues $dossier.FullName
     $perso = try { Get-TextesPersonnalises $dossier.FullName } catch { @{} }   # fichier abime : le suivi reste lisible
     $contacts = @(Import-Csv -Path (Join-Path $dossier.FullName "contacts.csv") -Delimiter ';' -Encoding UTF8)
+    # etapes prevues dans la campagne : au moins un contact a un objet pour cette etape. Une etape que personne n'a
+    # encore est "a rediger" (relance pas encore prete), pas une fin de sequence ; un objet vide sur un contact alors
+    # que d'autres en ont un reste un arret volontaire pour ce contact.
+    $etapesCampagne = @(1..4 | Where-Object { $n = $_; @($contacts | Where-Object { ([string]$_."Sujet$n").Trim() }).Count -gt 0 })
     foreach ($contact in $contacts) {
         # lignes vides du CSV (ex. lignes ajoutees par Excel en fin de fichier)
         if ([string]::IsNullOrWhiteSpace($contact.Nom) -and [string]::IsNullOrWhiteSpace($contact.Email)) { continue }
@@ -163,6 +167,7 @@ foreach ($dossier in $dossiers) {
 
         $suivante = $derniere + 1
         $code = ""
+        $aRediger = $false
         # donnees structurees pour l'interface (qui redige les messages elle-meme, en francais accentue)
         $ilYA = if ($derniere -gt 0) { ($aujourdhui - $dates[$derniere].Date).Days } else { $null }
         $relanceLe = if ($derniere -gt 0) { Format-Date $dates[$derniere].Date.AddDays($delai) } else { "" }
@@ -176,13 +181,15 @@ foreach ($dossier in $dossiers) {
             $action = "Brouillon Mail$suivante pret dans Outlook - a relire et envoyer"; $code = "brouillon"
         } elseif ($derniere -eq 0) {
             $action = "Mail1 pas encore cree (lancer 1 - Mail1.bat)"; $code = "afaire"
-        } elseif ($suivante -gt $nbEtapes) {
+        } elseif ($suivante -gt $nbEtapes -and ($suivante -gt 4 -or $etapesCampagne -contains $suivante)) {
             $action = if ($nbEtapes -lt 4) { "Sequence terminee apres Mail$nbEtapes (pas d'objet pour Mail$($nbEtapes + 1)), pas de reponse" } else { "Sequence terminee, pas de reponse" }; $code = "termine"
         } else {
+            $aRediger = $suivante -gt $nbEtapes   # relance pas encore redigee pour la campagne
+            $quoi = if ($aRediger) { " - objet et texte a rediger" } else { "" }
             if ($ilYA -ge $delai) {
-                $action = "Relance Mail$suivante possible (dernier envoi il y a $ilYA j)"; $code = "relance"
+                $action = "Relance Mail$suivante possible (dernier envoi il y a $ilYA j)$quoi"; $code = "relance"
             } else {
-                $action = "Relance Mail$suivante possible le $(Format-Date $dates[$derniere].Date.AddDays($delai)) (dernier envoi il y a $ilYA j)"; $code = "attente"
+                $action = "Relance Mail$suivante possible le $(Format-Date $dates[$derniere].Date.AddDays($delai)) (dernier envoi il y a $ilYA j)$quoi"; $code = "attente"
             }
         }
 
@@ -198,6 +205,8 @@ foreach ($dossier in $dossiers) {
             Mail3      = Format-Date $dates[3]
             Mail4      = Format-Date $dates[4]
             NbEtapes   = $nbEtapes
+            # relance suivante pas encore redigee (aucun objet dans la campagne pour cette etape)
+            ARediger   = [bool]$aRediger
             Action     = $action
             Code       = $code
             DateReponse      = if ($reponse) { Format-Date $reponse.Date } else { "" }

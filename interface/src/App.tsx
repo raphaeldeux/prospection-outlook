@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   BookOpenIcon,
   CircleArrowUpIcon,
+  CheckIcon,
   SettingsIcon,
   InboxIcon,
   ListTodoIcon,
@@ -70,6 +71,18 @@ import {
 import { ccInvalide, decouperAdresses } from "@/lib/apercu"
 import { cn } from "@/lib/utils"
 import { StatutBadge, statuts } from "@/StatutBadge"
+
+/** Pastille verte « À jour » de la barre de gauche : rien à préparer ni à envoyer */
+function PastilleAJour(props: { titre: string }) {
+  return (
+    <span
+      title={props.titre}
+      className="flex shrink-0 items-center gap-0.5 rounded-full bg-emerald-100 px-1.5 text-xs text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+    >
+      <CheckIcon className="size-3" /> À jour
+    </span>
+  )
+}
 
 /** Contact en cours de glisser-déposer vers une autre campagne */
 export type ContactGlisse = { campagne: string; emails: string[]; noms: string }
@@ -141,7 +154,7 @@ export default function App() {
                     ? "repondu"
                     : derniere === 0
                       ? "afaire"
-                      : derniere + 1 > x.NbEtapes
+                      : derniere + 1 > x.NbEtapes && !x.ARediger
                         ? "termine"
                         : possibleLe && possibleLe.getTime() > Date.now()
                           ? "attente"
@@ -356,10 +369,12 @@ export default function App() {
             )}
           >
             <span className="flex items-center gap-2"><ListTodoIcon className="size-4" /> À faire</span>
-            {totalAFaire > 0 && (
+            {totalAFaire > 0 ? (
               <span className="rounded-full bg-amber-100 px-1.5 text-xs text-amber-900 dark:bg-amber-950 dark:text-amber-200">
                 {totalAFaire}
               </span>
+            ) : (
+              suivi && campagnes.length > 0 && <PastilleAJour titre="Rien à préparer ni à envoyer : tout est à jour" />
             )}
           </button>
         </div>
@@ -396,13 +411,15 @@ export default function App() {
                     <span className="block text-xs font-normal text-muted-foreground">{dateCourte(lireNomCampagne(c.Nom))}</span>
                   )}
                 </span>
-                {aTraiter > 0 && (
+                {aTraiter > 0 ? (
                   <span
                     title={`${aTraiter} contact(s) à traiter : mail à préparer ou brouillon à envoyer`}
                     className="rounded-full bg-amber-100 px-1.5 text-xs text-amber-900 dark:bg-amber-950 dark:text-amber-200"
                   >
                     {aTraiter}
                   </span>
+                ) : (
+                  c.Contacts.length > 0 && <PastilleAJour titre="Rien à faire pour l'instant dans cette campagne" />
                 )}
               </button>
             )
@@ -758,7 +775,20 @@ function VueCampagne(props: {
               </CardHeader>
               {/* flex-1 + mt-auto : les boutons restent alignés en bas des 4 cartes, quelle que soit la longueur du message */}
               <CardContent className="flex flex-1 flex-col gap-2">
-                {e.prevus === 0 && contacts.length > 0 ? (
+                {e.prevus === 0 && e.aCreer + e.enAttente > 0 ? (
+                  <p className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300">
+                    <TriangleAlertIcon className="mt-0.5 size-3.5 shrink-0" />
+                    <span>
+                      {e.aCreer > 0
+                        ? `${e.aCreer} contact(s) attendent cette relance`
+                        : `${e.enAttente} contact(s) l'attendront bientôt`}{" "}
+                      : rédige son objet et son texte.{" "}
+                      <button className="underline underline-offset-2 hover:text-foreground" onClick={() => { props.setEtapeTexte(e.n); setOnglet("textes") }}>
+                        Rédiger Mail{e.n}
+                      </button>
+                    </span>
+                  </p>
+                ) : e.prevus === 0 && contacts.length > 0 ? (
                   <p className="text-xs text-muted-foreground">
                     Étape non prévue (aucun objet Mail{e.n}).{" "}
                     <button className="underline underline-offset-2 hover:text-foreground" onClick={() => { props.setEtapeTexte(e.n); setOnglet("textes") }}>

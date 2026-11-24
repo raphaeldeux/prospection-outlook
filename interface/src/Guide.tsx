@@ -244,8 +244,11 @@ export function Guide() {
             </p>
             <ul className="list-disc space-y-1 pl-5">
               <li>
-                <strong>Un objet vide</strong> arrête la séquence à cette étape (par exemple : pas de Mail4). Exception : un
-                contact qui n'a aucun objet (ligne ajoutée à la main dans le CSV) reçoit les objets communs.
+                <strong>Un objet vide pour un contact</strong>, alors que d'autres contacts en ont un, arrête sa séquence à cette
+                étape. Si <strong>aucun</strong> contact n'a encore d'objet pour une relance, elle est considérée comme pas
+                encore rédigée : l'outil signale quand même qu'elle est due (« Mail2 à rédiger »). Pour arrêter la campagne,
+                clos les contacts. Exception : un contact qui n'a aucun objet (ligne ajoutée à la main dans le CSV) reçoit les
+                objets communs.
               </li>
               <li>
                 <strong>Chaque étape doit avoir un objet différent</strong>, par exemple en ajoutant « Re: » devant : l'outil
@@ -403,6 +406,10 @@ export function Guide() {
               Un clic sur « Préparer » ouvre la bonne campagne, déjà filtrée.
             </p>
             <p>
+              Dans la barre de gauche, une pastille orange indique combien de contacts attendent une action dans chaque
+              campagne ; une pastille verte <strong>« À jour »</strong> signale qu'il n'y a rien à faire pour l'instant.
+            </p>
+            <p>
               L'heure de la dernière lecture d'Outlook est affichée à côté de <strong>Actualiser</strong> ; elle passe en orange
               au-delà de 4 heures. Actualise après avoir envoyé des mails.
             </p>
@@ -450,7 +457,7 @@ export function Guide() {
                 ["afaire", "Le brouillon Mail1 n'est pas encore dans Outlook (même si son texte est prêt) : clique sur « Créer les brouillons » de l'étape Mail1."],
                 ["brouillon", "Un brouillon attend dans Outlook : relis-le et envoie-le."],
                 ["attente", "Le dernier mail est trop récent : la date de relance possible est indiquée."],
-                ["relance", "Le délai est écoulé : la relance suivante peut être créée."],
+                ["relance", "Le délai est écoulé : la relance suivante peut être créée. « Mail2 à rédiger » : elle est due, mais son objet et son texte restent à écrire (onglet Textes des mails)."],
                 ["repondu", "Le contact a écrit : ses relances s'arrêtent. Lis sa réponse puis indique l'issue."],
                 ["clos", "L'issue est indiquée (RDV obtenu, pas intéressé…) : plus aucun mail ne lui est préparé."],
                 ["termine", "Toutes les étapes prévues sont parties, sans réponse."],

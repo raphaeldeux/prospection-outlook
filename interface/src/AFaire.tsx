@@ -34,6 +34,8 @@ export function AFaire(props: {
         campagne: c,
         etape: n,
         nb: c.Contacts.filter((x) => (n === 1 ? x.Code === "afaire" : x.Code === "relance" && etapeSuivante(x) === n)).length,
+        // relance attendue mais pas encore rédigée (aucun objet pour cette étape dans la campagne)
+        aRediger: c.Contacts.some((x) => x.Code === "relance" && etapeSuivante(x) === n && x.ARediger),
       }))
       .filter((x) => x.nb > 0),
   )
@@ -118,6 +120,7 @@ export function AFaire(props: {
                     {x.etape === 1
                       ? pl(x.nb, "premier mail à créer", "premiers mails à créer")
                       : pl(x.nb, `relance Mail${x.etape} possible`, `relances Mail${x.etape} possibles`)}
+                    {x.aRediger && <span className="text-amber-700 dark:text-amber-300"> · Mail{x.etape} à rédiger</span>}
                   </div>
                 </div>
                 <Button size="sm" onClick={() => props.onOuvrir(x.campagne.Nom, x.etape === 1 ? "afaire" : "relance")}>

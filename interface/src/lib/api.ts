@@ -11,6 +11,8 @@ export type Contact = {
   Mail3: string
   Mail4: string
   NbEtapes: number
+  /** Relance suivante pas encore rédigée : aucun objet dans la campagne pour cette étape */
+  ARediger?: boolean
   Action: string
   Code: Code
   /** Date de la réponse (jj/mm/aaaa) si le contact a répondu */
