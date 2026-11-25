@@ -484,7 +484,13 @@ export default function App() {
         ) : selection === PARAMETRES ? (
           <Parametres modifsEnCours={modifsEnCours} />
         ) : selection === AFAIRE && suivi && campagnes.length > 0 ? (
-          <AFaire suivi={suivi} campagnes={campagnes} onOuvrir={(nom, f) => choisir(nom, f ?? null)} onActualiser={actualiser} chargement={chargement} onIssueLocale={majIssueLocale} />
+          <AFaire suivi={suivi} campagnes={campagnes} onOuvrir={(nom, f) => choisir(nom, f ?? null)}
+            onRediger={(nom, n) => {
+              if (!choisir(nom)) return
+              setOnglet("textes")
+              setEtapeTexte(n)
+            }}
+            onActualiser={actualiser} chargement={chargement} onIssueLocale={majIssueLocale} />
         ) : erreur && !suivi ? (
           <EcranErreur erreur={erreur} onReessayer={actualiser} chargement={chargement} />
         ) : !campagne ? (

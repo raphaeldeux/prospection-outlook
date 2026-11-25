@@ -421,9 +421,17 @@ export function Guide() {
         <Partie titre="Envoyer et suivre">
           <Section id="afaire" titre="La page « À faire »">
             <p>
-              C'est la page d'accueil. Elle résume toutes tes campagnes : <strong>mails à préparer</strong>,{" "}
-              <strong>brouillons à envoyer</strong>, <strong>réponses à traiter</strong> et nombre de <strong>RDV obtenus</strong>.
-              Un clic sur « Préparer » ouvre la bonne campagne, déjà filtrée.
+              C'est la page d'accueil. Elle résume toutes tes campagnes, <strong>rangées par étape</strong> (Mail 1 à Mail 4).
+              En haut, une colonne par mail indique combien sont <strong>à préparer</strong>, <strong>à envoyer</strong> (brouillons
+              dans Outlook), <strong>à venir</strong> (délai de relance pas encore écoulé) et <strong>envoyés</strong>, puis les
+              réponses à traiter et les RDV obtenus. Une colonne bordée d'orange signale un mail dont le texte reste à rédiger.
+            </p>
+            <p>
+              Dessous, les actions dans l'ordre : <strong>1. Préparer les brouillons</strong>, <strong>2. Relire et envoyer dans
+              Outlook</strong>, <strong>3. Traiter les réponses</strong>. Chaque ligne porte l'étiquette de son mail (Mail 2,
+              Mail 3…). « Préparer » ouvre la bonne campagne, déjà filtrée ; si le texte de la relance n'existe pas encore, le
+              bouton devient <strong>« Rédiger le Mail N »</strong> et ouvre directement l'onglet Textes. Enfin,{" "}
+              <strong>Prochains jours</strong> liste, date par date, les relances qui deviendront possibles.
             </p>
             <p>
               Dans la barre de gauche, une pastille orange indique combien de contacts attendent une action dans chaque
