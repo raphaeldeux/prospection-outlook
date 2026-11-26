@@ -95,7 +95,9 @@ $draftItems = Get-ItemsParObjet -Folder $ns.GetDefaultFolder(16) -Prefixes $pref
 $inboxItems = @(Get-ReponsesRecues -Namespace $ns -Adresses @($contacts | ForEach-Object { $_.Email }) -Depuis (Get-Date).AddYears(-1) |
     Sort-Object -Property ReceivedTime -Descending)
 
-$seuilDate = (Get-Date).AddDays(-$MinJours)
+# Delai compte en jours calendaires (comme Suivi-Campagnes.ps1 / l'interface) et non a l'heure pres :
+# un mail envoye le 24 a 17h est relancable des le 26 au matin avec un delai de 2 jours.
+$seuilDate = (Get-Date).Date.AddDays(-$MinJours)
 $mesAdresses = Get-MesAdresses -Namespace $ns
 $ccCampagne = Get-CcCampagne $Campagne   # adresses en copie de tous les mails (parametres.json)
 $issues = Get-Issues $Campagne   # contacts clos par le commercial (RDV, pas interesse...) : plus de relance
@@ -156,7 +158,7 @@ for ($i = 0; $i -lt $contacts.Count; $i++) {
         continue
     }
 
-    if ($dernierEnvoye.SentOn -gt $seuilDate) {
+    if ($dernierEnvoye.SentOn.Date -gt $seuilDate) {
         Write-Host "[$($contact.Nom)] dernier envoi le $($dernierEnvoye.SentOn) - trop recent (< $MinJours jour(s)), ignore."
         continue
     }
